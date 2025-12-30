@@ -2,7 +2,6 @@ using Content.Shared._Goobstation.Vehicles; // Frontier: migrate under _Goobstat
 using Content.Server._NF.Radar; // Frontier
 using Content.Shared.Buckle.Components; // Frontier
 using Content.Shared._NF.Radar;
-using Content.Shared._Mono.Radar; // Frontier
 
 namespace Content.Server._Goobstation.Vehicles; // Frontier: migrate under _Goobstation
 
