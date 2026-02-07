@@ -1,0 +1,28 @@
+- type: entity
+  parent: ClothingUniformBase
+  id: ExperimentalLightEva
+  name: Experimental light eva
+  description: An enhanced eva suit, providing same protection as regular eva but with no additional .
+  components:
+  - type: Sprite
+    sprite: _CitadelStation/Clothing/OuterClothing/Suits/experimentaleva.rsi
+  - type: Clothing
+    sprite: _CitadelStation/Clothing/OuterClothing/Suits/experimentaleva.rsi
+  - type: PressureProtection
+    highPressureMultiplier: 0.7
+    lowPressureMultiplier: 1000
+  - type: Tag
+    tags:
+    - Hardsuit
+  - type: TemperatureProtection
+    heatingCoefficient: 0.001
+    coolingCoefficient: 0.05
+  - type: FireProtection
+    reduction: 0.8 # atmos firesuit offers best protection, hardsuits are a little vulnerable
+  - type: Armor
+    modifiers:
+      coefficients:
+        Slash: 0.9
+        Heat: 0.8
+        Cold: 0.8
+

@@ -83,7 +83,7 @@ namespace Content.Server.Atmos.EntitySystems
         /// </summary>
         private void UpdateCachedResistances(EntityUid uid, BarotraumaComponent barotrauma)
         {
-
+            var Sawmill = LogManager.GetSawmill("barotrauma");
             if (barotrauma.ProtectionSlots.Count != 0)
             {
                 if (!TryComp(uid, out InventoryComponent? inv) || !TryComp(uid, out ContainerManagerComponent? contMan))
@@ -95,8 +95,11 @@ namespace Content.Server.Atmos.EntitySystems
                 var lPModifier = float.MaxValue;
                 var lPMultiplier = float.MaxValue;
 
+                var bodyProtected = false;
+
                 foreach (var slot in barotrauma.ProtectionSlots)
                 {
+                    Sawmill.Debug(slot);
                     if (!_inventorySystem.TryGetSlotEntity(uid, slot, out var equipment, inv, contMan)
                         || !TryGetPressureProtectionValues(equipment.Value,
                             out var itemHighMultiplier,
@@ -105,13 +108,18 @@ namespace Content.Server.Atmos.EntitySystems
                             out var itemLowModifier))
                     {
                         // Missing protection, skin is exposed.
+                        if (slot == "jumpsuit")
+                            continue;
+                        if (slot == "outerClothing" && bodyProtected == true)
+                            continue;
                         hPModifier = 0f;
                         hPMultiplier = 1f;
                         lPModifier = 0f;
                         lPMultiplier = 1f;
                         break;
                     }
-
+                    if (slot == "jumpsuit")
+                        bodyProtected = true;
                     // The entity is as protected as its weakest part protection
                     hPModifier = Math.Max(hPModifier, itemHighModifier.Value);
                     hPMultiplier = Math.Max(hPMultiplier, itemHighMultiplier.Value);
