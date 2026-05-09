@@ -294,6 +294,7 @@
         damage:
           types:
             Radiation: 3
+      - !type:CauseHumanoidMutation
 
 - type: reagent
   id: HeartbreakerToxin

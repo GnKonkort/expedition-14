@@ -1,0 +1,10 @@
+- type: humanoidMutation
+  id: ExampleMutation
+  name: Example
+  effects:
+    - !type:EvenHealthChange
+        damage:
+          Brute: -0.5
+  chance: 1.0
+  marking: TattooCampbellRightArm
+
