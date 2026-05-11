@@ -1,6 +1,7 @@
 using Robust.Shared.Prototypes;
 using Content.Shared.EntityEffects;
 using Content.Shared.Humanoid.Markings;
+using Content.Shared.Polymorph;
 
 namespace Content.Shared._CitadelStation.HumanoidGenetics.Prototypes;
 
@@ -28,4 +29,12 @@ public sealed partial class HumanoidMutationPrototype : IPrototype {
     //Which marking to be applied
     [DataField("marking")]
     public ProtoId<MarkingPrototype> Marking;
+
+    //Which race entity should be transformed into
+    [DataField("race")]
+    public string Race = string.Empty;
+
+    //Which entity should person be polymorhped to, when mutation occurs
+    [DataField("polymorphEntity")]
+    public ProtoId<PolymorphPrototype> PolymorphEntity;
 }

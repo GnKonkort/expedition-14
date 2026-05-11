@@ -12,6 +12,8 @@ using Content.Shared.Humanoid;
 using Content.Server.EntityEffects;
 using Robust.Shared.Timing;
 using System.Linq;
+using Content.Server.Polymorph.Systems;
+using Content.Shared.Preferences;
 
 public sealed class HumanoidGeneticsSystem : SharedHumanoidGeneticsSystem
 {
@@ -31,6 +33,7 @@ public sealed class HumanoidGeneticsSystem : SharedHumanoidGeneticsSystem
     [Dependency] private readonly EntityEffectSystem _entityEffect = default!;
 
     [Dependency] private readonly IGameTiming _timing = default!;
+    [Dependency] private readonly PolymorphSystem _polymorph = default!;
     private readonly ISawmill _sawmill = Logger.GetSawmill("HumanoidGenetics");
 
     public override void Initialize()
@@ -58,12 +61,14 @@ public sealed class HumanoidGeneticsSystem : SharedHumanoidGeneticsSystem
                 {
                     mutation.LastUpdate = _timing.CurTime;
 
-                    if(!_proto.Resolve<HumanoidMutationPrototype>(mutation.MutationProto, out var mutationProto)) {
+                    if (!_proto.Resolve<HumanoidMutationPrototype>(mutation.MutationProto, out var mutationProto))
+                    {
                         _sawmill.Error($"Tried to resolve prototype {mutationProto}, failed misreably");
                         continue;
                     }
 
-                    foreach (var effect in mutationProto.Effects) {
+                    foreach (var effect in mutationProto.Effects)
+                    {
                         var baseargs = new EntityEffectBaseArgs(_uid, _entityManager);
                         effect.Effect(baseargs);
                     }
@@ -83,25 +88,34 @@ public sealed class HumanoidGeneticsSystem : SharedHumanoidGeneticsSystem
         // Iterate over mutations
         foreach (var prototype in _proto.EnumeratePrototypes<HumanoidMutationPrototype>())
         {
+            if (!_entityManager.HasComponent<HumanoidAppearanceComponent>(ev.Args.TargetEntity))
+                continue;
 
-            var mutation = new MutationStruct();
+            var mutation = new MutationClass();
 
             mutation.MutationProto = prototype;
             mutation.UpdateCooldown = TimeSpan.FromSeconds(1);
 
             if (_robustRandom.NextFloat() <= prototype.Chanсe)
             {
+                var matches = GeneContainerComponent.AppliedMutations.Where(p => p.MutationProto == prototype);
 
-                var matches = GeneContainerComponent.AppliedMutations.Where<MutationStruct>(p => p.MutationProto == prototype);
-
-                if(matches.Any())
+                if (matches.Any())
                     continue;
 
-                /*foreach (var mutationInContainer in GeneContainerComponent.AppliedMutations) {
-                    _sawmill.Debug($"Comparint {mutationInContainer.MutationProto.Id} and {mutation.MutationProto.Id} = {mutationInContainer.MutationProto.Id == mutation.MutationProto.Id}");
-                    if (mutationInContainer.MutationProto.Id == mutation.MutationProto.Id)
-                        continue;
-                }*/
+                // Polymorhping should always be pirorityzed
+                if (prototype.PolymorphEntity.Id != null)
+                {
+                    _polymorph.PolymorphEntity(ev.Args.TargetEntity, prototype.PolymorphEntity);
+                }
+
+                if (prototype.Race != string.Empty)
+                {
+                    var profile = HumanoidCharacterProfile.RandomWithSpecies(prototype.Race);
+
+                    _humanoidAppearance.SetSpecies(ev.Args.TargetEntity, prototype.Race);
+                    _humanoidAppearance.LoadProfile(ev.Args.TargetEntity, profile);
+                }
 
                 GeneContainerComponent.AppliedMutations.Add(mutation);
 
@@ -110,7 +124,7 @@ public sealed class HumanoidGeneticsSystem : SharedHumanoidGeneticsSystem
 
                 if (_entityManager.HasComponent<HumanoidAppearanceComponent>(ev.Args.TargetEntity))
                 {
-                    var AppearanceComponent = _entityManager.GetComponent<HumanoidAppearanceComponent>(ev.Args.TargetEntity);
+                    var appearanceComponent = _entityManager.GetComponent<HumanoidAppearanceComponent>(ev.Args.TargetEntity);
 
                     if (!_proto.Resolve(prototype.Marking, out var markingToApply))
                     {
