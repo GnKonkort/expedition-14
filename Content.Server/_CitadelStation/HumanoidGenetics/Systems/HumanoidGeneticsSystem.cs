@@ -147,7 +147,8 @@ public sealed class HumanoidGeneticsSystem : SharedHumanoidGeneticsSystem
                         Forced = true,
                         Inventory = PolymorphInventoryChange.Transfer,
                         RevertOnCrit = false,
-                        RevertOnDeath = false
+                        RevertOnDeath = false,
+                        AllowRepeatedMorphs = true
                     };
 
                     var newUid = _polymorph.PolymorphEntity(ev.Args.TargetEntity, config);
@@ -157,6 +158,10 @@ public sealed class HumanoidGeneticsSystem : SharedHumanoidGeneticsSystem
                     }
 
                     _metaData.SetEntityName((EntityUid)newUid, Name(ev.Args.TargetEntity));
+
+                    // Randomize appearance
+                    var profile = HumanoidCharacterProfile.RandomWithSpecies(_entityManager.GetComponent<HumanoidAppearanceComponent>((EntityUid)newUid).Species);
+                    _humanoidAppearance.LoadProfile((EntityUid)newUid, profile);
 
                     // We need to transfer and update Gene Container
 
