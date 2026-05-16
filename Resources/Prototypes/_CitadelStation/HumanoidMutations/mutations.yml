@@ -6,6 +6,7 @@
         damage:
           Brute: -0.5
   chance: 1.0
-  race: Moth
+  polymorphEntity: MobMoth
   marking: TattooCampbellRightArm
+
 

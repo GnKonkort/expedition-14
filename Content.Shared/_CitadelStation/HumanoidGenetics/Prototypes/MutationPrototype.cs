@@ -36,5 +36,5 @@ public sealed partial class HumanoidMutationPrototype : IPrototype {
 
     //Which entity should person be polymorhped to, when mutation occurs
     [DataField("polymorphEntity")]
-    public ProtoId<PolymorphPrototype> PolymorphEntity;
+    public EntProtoId PolymorphEntity;
 }

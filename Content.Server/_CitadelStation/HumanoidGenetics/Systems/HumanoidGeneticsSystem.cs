@@ -10,10 +10,13 @@ using Content.Server.Humanoid;
 using Content.Server.Popups;
 using Content.Shared.Humanoid;
 using Content.Server.EntityEffects;
+using Content.Shared.Polymorph;
 using Robust.Shared.Timing;
 using System.Linq;
 using Content.Server.Polymorph.Systems;
 using Content.Shared.Preferences;
+using Robust.Shared.Serialization.Manager;
+using Content.Server.MassMedia.Components;
 
 public sealed class HumanoidGeneticsSystem : SharedHumanoidGeneticsSystem
 {
@@ -34,6 +37,9 @@ public sealed class HumanoidGeneticsSystem : SharedHumanoidGeneticsSystem
 
     [Dependency] private readonly IGameTiming _timing = default!;
     [Dependency] private readonly PolymorphSystem _polymorph = default!;
+    [Dependency] private readonly IComponentFactory _compFact = default!;
+    [Dependency] private readonly ISerializationManager _serialization = default!;
+    [Dependency] private readonly MetaDataSystem _metaData = default!;
     private readonly ISawmill _sawmill = Logger.GetSawmill("HumanoidGenetics");
 
     public override void Initialize()
@@ -103,24 +109,20 @@ public sealed class HumanoidGeneticsSystem : SharedHumanoidGeneticsSystem
                 if (matches.Any())
                     continue;
 
-                // Polymorhping should always be pirorityzed
-                if (prototype.PolymorphEntity.Id != null)
-                {
-                    _polymorph.PolymorphEntity(ev.Args.TargetEntity, prototype.PolymorphEntity);
-                }
+                // This is bullshit. It does not transfer anything across entities
+                // Will have to use actual polymorhping prototype.Race will no longer be user
 
-                if (prototype.Race != string.Empty)
+                /*if (prototype.Race != string.Empty)
                 {
                     var profile = HumanoidCharacterProfile.RandomWithSpecies(prototype.Race);
 
-                    _humanoidAppearance.SetSpecies(ev.Args.TargetEntity, prototype.Race);
+                    //_humanoidAppearance.SetSpecies(ev.Args.TargetEntity, prototype.Race);
                     _humanoidAppearance.LoadProfile(ev.Args.TargetEntity, profile);
-                }
-
-                GeneContainerComponent.AppliedMutations.Add(mutation);
-
+                }*/
                 _sawmill.Debug("invoking mutation");
                 _popup.PopupEntity($"{Name(ev.Args.TargetEntity)}'s body change in a strange way...", ev.Args.TargetEntity);
+
+                GeneContainerComponent.AppliedMutations.Add(mutation);
 
                 if (_entityManager.HasComponent<HumanoidAppearanceComponent>(ev.Args.TargetEntity))
                 {
@@ -133,6 +135,66 @@ public sealed class HumanoidGeneticsSystem : SharedHumanoidGeneticsSystem
                     }
 
                     _humanoidAppearance.AddMarking(ev.Args.TargetEntity, prototype.Marking, forced: true);
+                }
+
+
+                if (prototype.PolymorphEntity.Id != null)
+                {
+                    var config = new PolymorphConfiguration
+                    {
+                        Entity = (EntProtoId)prototype.PolymorphEntity.Id,
+                        TransferDamage = true,
+                        Forced = true,
+                        Inventory = PolymorphInventoryChange.Transfer,
+                        RevertOnCrit = false,
+                        RevertOnDeath = false
+                    };
+
+                    var newUid = _polymorph.PolymorphEntity(ev.Args.TargetEntity, config);
+                    if (newUid == null) {
+                        _sawmill.Debug($"Tried to polymorph entity {Name(ev.Args.TargetEntity)} ({ev.Args.TargetEntity}) into {prototype.PolymorphEntity.Id} but failed miserably!");
+                        return;
+                    }
+
+                    _metaData.SetEntityName((EntityUid)newUid, Name(ev.Args.TargetEntity));
+
+                    // We need to transfer and update Gene Container
+
+                    _entityManager.TryGetComponent<HumanoidGeneContainerComponent>(ev.Args.TargetEntity, out var geneticComp);
+                    if (geneticComp == null) {
+                        _sawmill.Debug($"Tried to get component of type {typeof(HumanoidGeneContainerComponent)} from entity {Name(ev.Args.TargetEntity)} ({ev.Args.TargetEntity}) but failed miserably!");
+                        return;
+                    }
+                    var newGeneticsComp = (HumanoidGeneContainerComponent)_compFact.GetComponent(typeof(HumanoidGeneContainerComponent));
+                    newGeneticsComp.AppliedMutations = geneticComp.AppliedMutations;
+                    _entityManager.AddComponent(uid: (EntityUid)newUid, component: (Component)newGeneticsComp!, overwrite: true);
+
+                    // We also need to re-apply every marking
+                    foreach (var geneMarking in newGeneticsComp.AppliedMutations) {
+                        if (!_proto.Resolve(geneMarking.MutationProto, out var mutationProtoToApply))
+                        {
+                            _sawmill.Error($"Tried to resolve marking {geneMarking.MutationProto}, failed misreably");
+                            continue;
+                        }
+
+                        _humanoidAppearance.AddMarking((EntityUid)newUid, mutationProtoToApply.Marking, forced: true);
+                    }
+                    List<Type> types = new(){
+                    };
+
+                    foreach (var type in types)
+                    {
+                        _entityManager.TryGetComponent(ev.Args.TargetEntity, type, out var comp);
+                        if (comp == null) {
+                            _sawmill.Debug($"Tried to get component of type {type} from entity {Name(ev.Args.TargetEntity)} ({ev.Args.TargetEntity}) but failed miserably!");
+                            return;
+                        }
+                        var newComp = (Component)_compFact.GetComponent(type);
+                        var temp = (object)newComp;
+                        _serialization.CopyTo(comp, ref temp, notNullableOverride: true);
+                        _entityManager.AddComponent(uid: (EntityUid)newUid, component: (Component)temp!, overwrite: true);
+                    }
+
                 }
             }
         }
