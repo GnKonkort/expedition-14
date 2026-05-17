@@ -17,6 +17,10 @@ using Content.Server.Polymorph.Systems;
 using Content.Shared.Preferences;
 using Robust.Shared.Serialization.Manager;
 using Content.Server.MassMedia.Components;
+using Content.Server.Polymorph.Components;
+using Content.Shared.Chemistry.Components.SolutionManager;
+using Content.Server.Chemistry.EntitySystems;
+using Content.Shared.Chemistry.EntitySystems;
 
 public sealed class HumanoidGeneticsSystem : SharedHumanoidGeneticsSystem
 {
@@ -40,6 +44,7 @@ public sealed class HumanoidGeneticsSystem : SharedHumanoidGeneticsSystem
     [Dependency] private readonly IComponentFactory _compFact = default!;
     [Dependency] private readonly ISerializationManager _serialization = default!;
     [Dependency] private readonly MetaDataSystem _metaData = default!;
+    [Dependency] private readonly SharedSolutionContainerSystem _solutionContainer = default!;
     private readonly ISawmill _sawmill = Logger.GetSawmill("HumanoidGenetics");
 
     public override void Initialize()
@@ -51,6 +56,7 @@ public sealed class HumanoidGeneticsSystem : SharedHumanoidGeneticsSystem
         }
 
         SubscribeLocalEvent<ExecuteEntityEffectEvent<CauseHumanoidMutation>>(OnCauseHumanoidMutation);
+        SubscribeLocalEvent<ExecuteEntityEffectEvent<CauseHumanoidMutationReversion>>(OnCauseHumanoidMutationReversion);
     }
 
     public override void Update(float frameTime)
@@ -152,7 +158,8 @@ public sealed class HumanoidGeneticsSystem : SharedHumanoidGeneticsSystem
                     };
 
                     var newUid = _polymorph.PolymorphEntity(ev.Args.TargetEntity, config);
-                    if (newUid == null) {
+                    if (newUid == null)
+                    {
                         _sawmill.Debug($"Tried to polymorph entity {Name(ev.Args.TargetEntity)} ({ev.Args.TargetEntity}) into {prototype.PolymorphEntity.Id} but failed miserably!");
                         return;
                     }
@@ -166,16 +173,19 @@ public sealed class HumanoidGeneticsSystem : SharedHumanoidGeneticsSystem
                     // We need to transfer and update Gene Container
 
                     _entityManager.TryGetComponent<HumanoidGeneContainerComponent>(ev.Args.TargetEntity, out var geneticComp);
-                    if (geneticComp == null) {
+                    if (geneticComp == null)
+                    {
                         _sawmill.Debug($"Tried to get component of type {typeof(HumanoidGeneContainerComponent)} from entity {Name(ev.Args.TargetEntity)} ({ev.Args.TargetEntity}) but failed miserably!");
                         return;
                     }
-                    var newGeneticsComp = (HumanoidGeneContainerComponent)_compFact.GetComponent(typeof(HumanoidGeneContainerComponent));
+
+                    var newGeneticsComp = _compFact.GetComponent<HumanoidGeneContainerComponent>();
                     newGeneticsComp.AppliedMutations = geneticComp.AppliedMutations;
                     _entityManager.AddComponent(uid: (EntityUid)newUid, component: (Component)newGeneticsComp!, overwrite: true);
 
                     // We also need to re-apply every marking
-                    foreach (var geneMarking in newGeneticsComp.AppliedMutations) {
+                    foreach (var geneMarking in newGeneticsComp.AppliedMutations)
+                    {
                         if (!_proto.Resolve(geneMarking.MutationProto, out var mutationProtoToApply))
                         {
                             _sawmill.Error($"Tried to resolve marking {geneMarking.MutationProto}, failed misreably");
@@ -184,13 +194,16 @@ public sealed class HumanoidGeneticsSystem : SharedHumanoidGeneticsSystem
 
                         _humanoidAppearance.AddMarking((EntityUid)newUid, mutationProtoToApply.Marking, forced: true);
                     }
-                    List<Type> types = new(){
+                    /*List<Type> types = new()
+                    {
+                        typeof(SolutionContainerManagerComponent)
                     };
 
                     foreach (var type in types)
                     {
                         _entityManager.TryGetComponent(ev.Args.TargetEntity, type, out var comp);
-                        if (comp == null) {
+                        if (comp == null)
+                        {
                             _sawmill.Debug($"Tried to get component of type {type} from entity {Name(ev.Args.TargetEntity)} ({ev.Args.TargetEntity}) but failed miserably!");
                             return;
                         }
@@ -198,11 +211,99 @@ public sealed class HumanoidGeneticsSystem : SharedHumanoidGeneticsSystem
                         var temp = (object)newComp;
                         _serialization.CopyTo(comp, ref temp, notNullableOverride: true);
                         _entityManager.AddComponent(uid: (EntityUid)newUid, component: (Component)temp!, overwrite: true);
-                    }
+                    }*/
 
+                    if (_entityManager.TryGetComponent<SolutionContainerManagerComponent>(ev.Args.TargetEntity, out var oldSolutionManager) && _entityManager.TryGetComponent<SolutionContainerManagerComponent>(newUid, out var newSolutionManager))
+                    {
+
+                        foreach (var (name, soln) in _solutionContainer.EnumerateSolutions((ev.Args.TargetEntity, oldSolutionManager)))
+                        {
+                            var solution = soln.Comp.Solution;
+                            if (!_solutionContainer.TryGetSolution(((EntityUid)newUid, newSolutionManager), name, out var entity, out var newSolution))
+                                continue;
+                            _solutionContainer.AddSolution((Entity<Content.Shared.Chemistry.Components.SolutionComponent>)entity, solution);
+                            _solutionContainer.RemoveAllSolution(soln);
+                        }
+                    }
                 }
             }
         }
 
+    }
+
+    public void OnCauseHumanoidMutationReversion(ref ExecuteEntityEffectEvent<CauseHumanoidMutationReversion> ev)
+    {
+        if (!_entityManager.HasComponent<HumanoidGeneContainerComponent>(ev.Args.TargetEntity))
+            return;
+
+        var geneContainer = _entityManager.GetComponent<HumanoidGeneContainerComponent>(ev.Args.TargetEntity);
+
+        if (geneContainer.AppliedMutations.Count == 0)
+            return;
+
+        var mutationToRemove = _robustRandom.PickAndTake<MutationClass>(geneContainer.AppliedMutations);
+
+        if (!_proto.Resolve(mutationToRemove.MutationProto, out var mutation))
+        {
+            _sawmill.Debug($"Tried to resolve mutation {mutationToRemove.MutationProto} while removing it from {ev.Args.TargetEntity} but failed misreably");
+            return;
+        }
+
+        _humanoidAppearance.RemoveMarking(ev.Args.TargetEntity, mutation.Marking, true);
+
+        // Was transformed by mutation, transforming back
+        if (_entityManager.HasComponent<PolymorphedEntityComponent>(ev.Args.TargetEntity) && mutation.PolymorphEntity.Id != null)
+        {
+            var newUid = _polymorph.Revert(ev.Args.TargetEntity);
+            if (newUid == null)
+            {
+                _sawmill.Debug($"Tried to revert polymorping from mutation {mutation.Name} for entity {ev.Args.TargetEntity} but failed miserably!");
+                return;
+            }
+            if (!_entityManager.TryGetComponent<HumanoidGeneContainerComponent>(ev.Args.TargetEntity, out var geneticComp) ||
+                !_entityManager.TryGetComponent<HumanoidGeneContainerComponent>(newUid, out var newGeneticComp))
+            {
+                _sawmill.Debug($"Attempted to get genetic components for previous and current entity, but failed miserably");
+                return;
+            }
+
+            // Remove all markings caused by mutations and apply new ones
+            foreach (var geneMarking in newGeneticComp.AppliedMutations)
+            {
+                if (!_proto.Resolve(geneMarking.MutationProto, out var mutationProtoToRemove))
+                {
+                    _sawmill.Error($"Tried to resolve marking {geneMarking.MutationProto}, failed misreably");
+                    continue;
+                }
+                _humanoidAppearance.RemoveMarking((EntityUid)newUid, mutationProtoToRemove.Marking);
+            }
+            foreach (var geneMarking in geneticComp.AppliedMutations)
+            {
+                if (!_proto.Resolve(geneMarking.MutationProto, out var mutationProtoToRemove))
+                {
+                    _sawmill.Error($"Tried to resolve marking {geneMarking.MutationProto}, failed misreably");
+                    continue;
+                }
+                _humanoidAppearance.AddMarking(ev.Args.TargetEntity, mutationProtoToRemove.Marking);
+            }
+
+            newGeneticComp.AppliedMutations = geneticComp.AppliedMutations;
+
+            _entityManager.AddComponent((EntityUid)newUid, newGeneticComp, true);
+
+            if (_entityManager.TryGetComponent<SolutionContainerManagerComponent>(ev.Args.TargetEntity, out var oldSolutionManager) && _entityManager.TryGetComponent<SolutionContainerManagerComponent>(newUid, out var newSolutionManager))
+            {
+                _sawmill.Debug("AAAAAAAAAAAAAAAAAAA BLYAT!!!!");
+                foreach (var (name, soln) in _solutionContainer.EnumerateSolutions((ev.Args.TargetEntity, oldSolutionManager)))
+                {
+                    var solution = soln.Comp.Solution;
+                    if (!_solutionContainer.TryGetSolution(((EntityUid)newUid, newSolutionManager), name, out var entity, out var newSolution))
+                        continue;
+                    _solutionContainer.AddSolution((Entity<Content.Shared.Chemistry.Components.SolutionComponent>)entity, solution);
+                    _solutionContainer.RemoveAllSolution(soln);
+                }
+            }
+
+        }
     }
 }

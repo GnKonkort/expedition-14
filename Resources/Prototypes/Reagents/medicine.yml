@@ -605,6 +605,7 @@
         damage:
           types:
             Caustic: 0.3
+      - !type:CauseHumanoidMutationReversion #Expedition 14
 
 - type: reagent
   id: PolypyryliumOligomers
