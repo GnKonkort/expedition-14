@@ -7,6 +7,6 @@ namespace Content.Shared._CitadelStation.HumanoidGenetics.Effects;
 public sealed partial class CauseHumanoidMutationReversion : EventEntityEffect<CauseHumanoidMutationReversion> {
     protected override string ReagentEffectGuidebookText(IPrototypeManager prototype, IEntitySystemManager entSys)
     {
-        return "Causes mutations in organic matter";
+        return "Reverses mutations in organic matter";
     }
 }
