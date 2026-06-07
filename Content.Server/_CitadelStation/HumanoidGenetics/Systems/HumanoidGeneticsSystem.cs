@@ -303,7 +303,6 @@ public sealed class HumanoidGeneticsSystem : SharedHumanoidGeneticsSystem
                     _solutionContainer.RemoveAllSolution(soln);
                 }
             }
-
         }
     }
 }
