@@ -1,9 +1,10 @@
 using Content.Shared._CitadelStation.HumanoidGenetics.Prototypes;
 using Robust.Shared.Prototypes;
+using Robust.Shared.Serialization;
 
 namespace Content.Shared._CitadelStation.HumanoidGenetics.Components;
 
-
+[Serializable, NetSerializable]
 public class MutationClass
 {
     public ProtoId<HumanoidMutationPrototype> MutationProto { get; set; }

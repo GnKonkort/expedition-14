@@ -4,8 +4,7 @@ using Content.Shared.Interaction;
 using Content.Shared.DoAfter;
 using Content.Shared._CitadelStation.HumanoidGenetics.Events;
 using Robust.Server.GameObjects;
-using Content.Shared._CitadelStation.HumanoidGenetics.UIKeys;
-using Robust.Shared.Player;
+using Content.Shared._CitadelStation.HumanoidGenetics.UI;
 
 namespace Content.Server._CitadelStation.HumanoidGenetics.Systems;
 
@@ -58,6 +57,7 @@ public sealed class HumanoidGeneticSequencerSystem : SharedHumanoidGeneticSequen
     private void OnDoAfter(Entity<HumanoidGeneSequencerComponent> ent, ref GeneticSequencerScanDoAfterEvent args)
     {
         _sawmill.Debug($"{Name(args.User)} interacts with ${Name(ent.Owner)}");
+
         if (!_uiSystem.HasUi(ent, HumanoidGeneticSequencerUiKey.Key))
         {
             _sawmill.Debug($"{Name(args.User)} failed to retrieve UI key");
@@ -66,6 +66,13 @@ public sealed class HumanoidGeneticSequencerSystem : SharedHumanoidGeneticSequen
         if (!_uiSystem.TryOpenUi(ent.Owner, HumanoidGeneticSequencerUiKey.Key, args.User))
         {
             _sawmill.Debug($"Failed to open ui with {Name(ent.Owner)} for {Name(args.User)}");
+        }
+
+        if (args.Target is EntityUid target) {
+
+            var mutationsList = _entityManager.GetComponent<HumanoidGeneContainerComponent>(target).AppliedMutations;
+
+            _uiSystem.SetUiState(ent.Owner, HumanoidGeneticSequencerUiKey.Key, new HumanoidGeneticSequencerBoundUserInterfaceState(mutationsList, GetNetEntity(args.Target)));
         }
     }
 }
