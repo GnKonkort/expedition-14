@@ -3,5 +3,20 @@
     xmlns:controls="clr-namespace:Content.Client.UserInterface.Controls"
     MaxHeight="525"
     MinWidth="300">
-    <SpriteView OverrideDirection="South" Scale="2 2" Name="SpriteView" Access="Public" SetSize="64 64" />
+    <BoxContainer VerticalAlignment="Top" HorizontalAlignment="Left" Orientation="Vertical">
+        <BoxContainer Name="TargetBox" VerticalAlignment="Top" HorizontalAlignment="Left" Access="Public" Orientation="Horizontal">
+            <SpriteView OverrideDirection="South" Scale="2 2" Name="SpriteView" Access="Public" SetSize="64 64" />
+            <BoxContainer Name="TargetData" HorizontalAlignment="Left" Orientation="Vertical">
+                <Label StyleClasses="monospace" Name="TargetName" Text="NO USER DATA" Access="Public" />
+                <Label StyleClasses="monospace" Name="TargetRace" Text="NO USER DATA" Access="Public" />
+                <Label StyleClasses="monospace" Name="TargetSex" Text="NO USER DATA" Access="Public" />
+                <Label StyleClasses="monospace" Name="TargetAge" Text="NO USER DATA" Access="Public" />
+            </BoxContainer>
+        </BoxContainer>
+        <BoxContainer VerticalExpand="True">
+            <BoxContainer Name="MutationsList" Access="Public" Orientation="Vertical">
+
+            </BoxContainer>
+        </BoxContainer>
+    </BoxContainer>
 </controls:FancyWindow>

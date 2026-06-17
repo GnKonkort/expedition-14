@@ -11,4 +11,8 @@ public sealed partial class HumanoidGeneticSequencer : FancyWindow
     {
         RobustXamlLoader.Load(this);
     }
+
+    public void SetTargetData() {
+
+    }
 }

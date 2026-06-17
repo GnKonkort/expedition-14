@@ -19,7 +19,8 @@ public sealed class HumanoidGeneticSequencerBoundUserInterface(EntityUid owner, 
         _window ??= this.CreateWindow<HumanoidGeneticSequencer>();
     }
 
-    protected override void UpdateState(BoundUserInterfaceState state) {
+    protected override void UpdateState(BoundUserInterfaceState state)
+    {
         if (state is not HumanoidGeneticSequencerBoundUserInterfaceState sequencerState || _window is null)
             return;
 
@@ -27,15 +28,26 @@ public sealed class HumanoidGeneticSequencerBoundUserInterface(EntityUid owner, 
 
         var target = _entManager.GetEntity(sequencerState.TargetEntity);
 
+        if (target is not EntityUid scannerTarget)
+            return;
+
         _window.SpriteView.SetEntity(target);
-        if(sequencerState.Mutations == null || sequencerState.Mutations.Count == 0) {
-            _window.AddChild(new Label(){
-                Text = $"No Mutations detected"
+
+        _window.TargetName.Text = _entManager.GetComponent<MetaDataComponent>(scannerTarget).EntityName;
+        if (sequencerState.Mutations == null || sequencerState.Mutations.Count == 0)
+        {
+            _window.MutationsList.AddChild(new Label
+            {
+                Text = $"No mutations detected",
+                StyleClasses = {"monospace"}
             });
-        } else {
+        }
+        else
+        {
             foreach (var mutation in sequencerState.Mutations) {
                 _window.AddChild(new Label(){
-                    Text = $"Mutation detected: {mutation.MutationProto}"
+                    Text = $"Mutation detected: {mutation.MutationProto}",
+                    StyleClasses = {"monospace"}
                 });
             }
         }
