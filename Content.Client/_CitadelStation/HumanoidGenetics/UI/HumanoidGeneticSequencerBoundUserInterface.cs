@@ -6,6 +6,7 @@ using Robust.Client.Graphics;
 using Robust.Client.UserInterface;
 using Robust.Client.UserInterface.Controls;
 using Robust.Client.UserInterface.CustomControls;
+using Content.Shared.Humanoid;
 
 namespace Content.Client._CitadelStation.HumanoidGenetics.UI;
 
@@ -34,6 +35,14 @@ public sealed class HumanoidGeneticSequencerBoundUserInterface(EntityUid owner, 
         _window.SpriteView.SetEntity(target);
 
         _window.TargetName.Text = _entManager.GetComponent<MetaDataComponent>(scannerTarget).EntityName;
+
+        if (_entManager.TryGetComponent<HumanoidAppearanceComponent>(scannerTarget, out var comp)) {
+            if (comp is HumanoidAppearanceComponent appearanceComponent) {
+                _window.TargetRace.Text = appearanceComponent.Species;
+                _window.TargetAge.Text = appearanceComponent.Age.ToString();
+                _window.TargetSex.Text = appearanceComponent.Sex.ToString();
+            }
+        }
         if (sequencerState.Mutations == null || sequencerState.Mutations.Count == 0)
         {
             _window.MutationsList.AddChild(new Label
@@ -45,7 +54,7 @@ public sealed class HumanoidGeneticSequencerBoundUserInterface(EntityUid owner, 
         else
         {
             foreach (var mutation in sequencerState.Mutations) {
-                _window.AddChild(new Label(){
+                _window.MutationsList.AddChild(new Label(){
                     Text = $"Mutation detected: {mutation.MutationProto}",
                     StyleClasses = {"monospace"}
                 });
