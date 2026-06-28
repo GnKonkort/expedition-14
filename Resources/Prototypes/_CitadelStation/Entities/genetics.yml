@@ -1,0 +1,82 @@
+- type: entity
+  id: HandheldGeneticSequencer
+  parent: [BaseItem, RecyclableItemDeviceSmall] # Frontier: added RecyclableItemDeviceSmall
+  name: genetic sequencer
+  suffix: Always Powered
+  description: A hand-held body scanner capable of scanning for genetic mutations
+  components:
+  - type: Sprite
+    sprite: Objects/Specific/Medical/healthanalyzer.rsi
+    state: icon
+    layers:
+      - state: icon
+      - state: analyzer
+        shader: unshaded
+        visible: true
+        map: [ "enum.PowerDeviceVisualLayers.Powered" ]
+  - type: Item
+    heldPrefix: analyzer
+    storedRotation: -90
+  - type: UserInterface
+    interfaces:
+      enum.HumanoidGeneticSequencerUiKey.Key:
+        type: HumanoidGeneticSequencerBoundUserInterface
+  - type: ItemToggle
+    onUse: false
+  - type: Appearance
+  - type: GenericVisualizer
+    visuals:
+      enum.PowerCellSlotVisuals.Enabled:
+        enum.PowerDeviceVisualLayers.Powered:
+          True: { visible: true }
+          False: { visible: false }
+  - type: GuideHelp
+    guides:
+    - MedicalDoctor
+  - type: StaticPrice # Frontier
+    price: 30 # Frontier
+  - type: HumanoidGeneSequencer # CitadelStation
+
+- type: entity
+  parent: [BaseStructure, ConstructibleMachine] # Not a BaseMachinePowered since we don't want the anchorable component
+  id: GeneticPod
+  name: genetic pod
+  description: A special machine allowing to isolate and mofify certain genomes. Results are not guaranteed
+  components:
+  - type: Sprite
+    sprite: Structures/Machines/Medical/cryopod.rsi
+    drawdepth: Mobs
+    noRot: true
+    offset: 0, 0.5
+    layers:
+      - sprite: Structures/Piping/Atmospherics/pipe.rsi
+        state: pipeHalf
+        offset: 0, -0.5
+        map: [ "enum.PipeVisualLayers.Pipe" ]
+      - state: pod-open
+        map: [ "enum.CryoPodVisualLayers.Base" ]
+      - state: cover-on
+        map: [ "enum.CryoPodVisualLayers.Cover" ]
+        visible: false
+      - state: pod-panel
+        map: [ "enum.WiresVisualLayers.MaintenancePanel" ]
+        visible: false
+  - type: InteractionOutline
+  - type: Fixtures
+    fixtures:
+      fix1:
+        shape:
+          !type:PhysShapeAabb
+          bounds: "-0.5,-0.5,0.5,0.5"
+        density: 200
+        mask:
+          - MachineMask
+        layer:
+          - MachineLayer
+  - type: GeneticPod
+    entryDelay: 1.0
+  - type: Climbable
+  - type: ContainerContainer
+    containers:
+      body_container: !type:ContainerSlot
+
