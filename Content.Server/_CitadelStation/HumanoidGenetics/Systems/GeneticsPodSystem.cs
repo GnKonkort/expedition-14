@@ -7,6 +7,7 @@ using Content.Shared._CitadelStation.HumanoidGenetics.Events;
 using Content.Server.DoAfter;
 using Robust.Server.Containers;
 using Robust.Shared.Containers;
+using Content.Shared.Verbs;
 
 namespace Content.server._CitadelStation.HumanoidGenetics.Systems;
 public sealed class GeneticsPodSystem : SharedGeneticsPodSystem {
@@ -20,8 +21,30 @@ public sealed class GeneticsPodSystem : SharedGeneticsPodSystem {
         SubscribeLocalEvent<GeneticPodComponent, DragDropTargetEvent>(OnDragDropTargetEvent);
         SubscribeLocalEvent<GeneticPodComponent, GeneticPodDragIntoEvent>(OnDragIntoFinished);
         SubscribeLocalEvent<GeneticPodComponent, ComponentStartup>(OnInit);
+        SubscribeLocalEvent<GeneticPodComponent, GetVerbsEvent<AlternativeVerb>>(AddAlternativeVerbs);
         _saw = Logger.GetSawmill("genetic_server");
         _saw.Debug("Successfully started genetic pod system");
+    }
+
+    private void AddAlternativeVerbs(Entity<GeneticPodComponent> ent, ref GetVerbsEvent<AlternativeVerb> args)
+    {
+        if (ent.Comp.BodyContainer.ContainedEntity != null) {
+            AlternativeVerb verb = new()
+            {
+                Act = () => EjectBody(ent),
+                Category = VerbCategory.Eject,
+                Text = Loc.GetString("medical-scanner-verb-noun-occupant")
+            };
+            args.Verbs.Add(verb);
+        }
+    }
+
+    private void EjectBody(Entity<GeneticPodComponent> ent)
+    {
+        if (ent.Comp.BodyContainer.ContainedEntity == null)
+            return;
+
+        _containerSystem.Remove(ent.Comp.BodyContainer.ContainedEntity.Value, ent.Comp.BodyContainer, force: true);
     }
 
     private void OnInit(EntityUid uid, GeneticPodComponent component, ComponentStartup args)
