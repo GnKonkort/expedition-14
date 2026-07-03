@@ -8,6 +8,7 @@ using Content.Server.DoAfter;
 using Robust.Server.Containers;
 using Robust.Shared.Containers;
 using Content.Shared.Verbs;
+using Content.Shared._CitadelStation.HumanoidGenetics.UI;
 
 namespace Content.server._CitadelStation.HumanoidGenetics.Systems;
 public sealed class GeneticsPodSystem : SharedGeneticsPodSystem {
@@ -36,7 +37,34 @@ public sealed class GeneticsPodSystem : SharedGeneticsPodSystem {
                 Text = Loc.GetString("medical-scanner-verb-noun-occupant")
             };
             args.Verbs.Add(verb);
+
+            var temp = args.User;
+
+            verb = new()
+            {
+                Act = () => OpenScaner(ent, temp),
+                Category = VerbCategory.Eject,
+                Text = Loc.GetString("Scan user")
+            };
+            args.Verbs.Add(verb);
         }
+    }
+
+    private void OpenScaner(Entity<GeneticPodComponent> ent, EntityUid actor)
+    {
+        if (ent.Comp.BodyContainer.ContainedEntity == null)
+            return;
+
+        if (!TryComp<HumanoidGeneContainerComponent>(ent.Comp.BodyContainer.ContainedEntity, out var geneContainer))
+            return;
+
+        if (!_uiSystem.TryOpenUi(ent.Owner, GeneticPodUiKey.Key, actor))
+            return;
+
+
+        var mutationsList = geneContainer.AppliedMutations;
+
+        _uiSystem.SetUiState(actor, GeneticPodUiKey.Key, new GeneticPodBoundUserInterfaceState(mutationsList, GetNetEntity(actor)));
     }
 
     private void EjectBody(Entity<GeneticPodComponent> ent)

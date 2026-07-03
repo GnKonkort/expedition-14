@@ -79,4 +79,7 @@
   - type: ContainerContainer
     containers:
       body_container: !type:ContainerSlot
-
+  - type: UserInterface
+    interfaces:
+      enum.GeneticPodUiKey.Key:
+        type: GeneticPodBoundUserInterface
