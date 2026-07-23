@@ -95,13 +95,15 @@ public sealed class HumanoidGeneticsSystem : SharedHumanoidGeneticsSystem
         if (!_entityManager.HasComponent<HumanoidGeneContainerComponent>(ev.Args.TargetEntity))
             return;
 
-        var GeneContainerComponent = _entityManager.GetComponent<HumanoidGeneContainerComponent>(ev.Args.TargetEntity);
+
 
         // Iterate over mutations
         foreach (var prototype in _proto.EnumeratePrototypes<HumanoidMutationPrototype>())
         {
             if (!_entityManager.HasComponent<HumanoidAppearanceComponent>(ev.Args.TargetEntity))
                 continue;
+
+            var GeneContainerComponent = _entityManager.GetComponent<HumanoidGeneContainerComponent>(ev.Args.TargetEntity);
 
             var mutation = new MutationClass();
 
@@ -112,23 +114,14 @@ public sealed class HumanoidGeneticsSystem : SharedHumanoidGeneticsSystem
             {
                 var matches = GeneContainerComponent.AppliedMutations.Where(p => p.MutationProto == prototype);
 
-                if (matches.Any())
+                if (matches.Any()) {
+                    _sawmill.Debug("Attempted to add existing mutation. Skipping");
                     continue;
-
-                // This is bullshit. It does not transfer anything across entities
-                // Will have to use actual polymorhping prototype.Race will no longer be user
-
-                /*if (prototype.Race != string.Empty)
-                {
-                    var profile = HumanoidCharacterProfile.RandomWithSpecies(prototype.Race);
-
-                    //_humanoidAppearance.SetSpecies(ev.Args.TargetEntity, prototype.Race);
-                    _humanoidAppearance.LoadProfile(ev.Args.TargetEntity, profile);
-                }*/
+                }
                 _sawmill.Debug("invoking mutation");
-                _popup.PopupEntity($"{Name(ev.Args.TargetEntity)}'s body change in a strange way...", ev.Args.TargetEntity);
 
-                GeneContainerComponent.AppliedMutations.Add(mutation);
+
+
 
                 if (_entityManager.HasComponent<HumanoidAppearanceComponent>(ev.Args.TargetEntity))
                 {
@@ -139,12 +132,21 @@ public sealed class HumanoidGeneticsSystem : SharedHumanoidGeneticsSystem
                         _sawmill.Error($"Tried to resolve marking {prototype.Marking}, failed misreably");
                         continue;
                     }
-
-                    _humanoidAppearance.AddMarking(ev.Args.TargetEntity, prototype.Marking, forced: true);
                 }
 
+                _sawmill.Debug($"Resolved prototype: {prototype.PolymorphEntity.Id}");
 
-                if (prototype.PolymorphEntity.Id != null)
+                if (_entityManager.HasComponent<PolymorphedEntityComponent>(ev.Args.TargetEntity) && prototype.PolymorphEntity.Id != null) {
+                    _sawmill.Debug("SKIPPING FUCKING MUTATION!");
+                    continue;
+                }
+
+                _humanoidAppearance.AddMarking(ev.Args.TargetEntity, prototype.Marking, forced: true);
+                GeneContainerComponent.AppliedMutations.Add(mutation);
+                _sawmill.Debug($"Successfully added mutation {mutation}");
+                _popup.PopupEntity($"{Name(ev.Args.TargetEntity)}'s body change in a strange way...", ev.Args.TargetEntity);
+
+                if (prototype.PolymorphEntity.Id != null && !_entityManager.HasComponent<PolymorphedEntityComponent>(ev.Args.TargetEntity))
                 {
                     var config = new PolymorphConfiguration
                     {
@@ -157,18 +159,18 @@ public sealed class HumanoidGeneticsSystem : SharedHumanoidGeneticsSystem
                         AllowRepeatedMorphs = true
                     };
 
-                    var newUid = _polymorph.PolymorphEntity(ev.Args.TargetEntity, config);
-                    if (newUid == null)
+                    var newUid_ = _polymorph.PolymorphEntity(ev.Args.TargetEntity, config);
+                    if (newUid_ is not EntityUid newUid)
                     {
                         _sawmill.Debug($"Tried to polymorph entity {Name(ev.Args.TargetEntity)} ({ev.Args.TargetEntity}) into {prototype.PolymorphEntity.Id} but failed miserably!");
                         return;
                     }
 
-                    _metaData.SetEntityName((EntityUid)newUid, Name(ev.Args.TargetEntity));
+                    _metaData.SetEntityName(newUid, Name(ev.Args.TargetEntity));
 
                     // Randomize appearance
                     var profile = HumanoidCharacterProfile.RandomWithSpecies(_entityManager.GetComponent<HumanoidAppearanceComponent>((EntityUid)newUid).Species);
-                    _humanoidAppearance.LoadProfile((EntityUid)newUid, profile);
+                    _humanoidAppearance.LoadProfile(newUid, profile);
 
                     // We need to transfer and update Gene Container
 
@@ -194,24 +196,6 @@ public sealed class HumanoidGeneticsSystem : SharedHumanoidGeneticsSystem
 
                         _humanoidAppearance.AddMarking((EntityUid)newUid, mutationProtoToApply.Marking, forced: true);
                     }
-                    /*List<Type> types = new()
-                    {
-                        typeof(SolutionContainerManagerComponent)
-                    };
-
-                    foreach (var type in types)
-                    {
-                        _entityManager.TryGetComponent(ev.Args.TargetEntity, type, out var comp);
-                        if (comp == null)
-                        {
-                            _sawmill.Debug($"Tried to get component of type {type} from entity {Name(ev.Args.TargetEntity)} ({ev.Args.TargetEntity}) but failed miserably!");
-                            return;
-                        }
-                        var newComp = (Component)_compFact.GetComponent(type);
-                        var temp = (object)newComp;
-                        _serialization.CopyTo(comp, ref temp, notNullableOverride: true);
-                        _entityManager.AddComponent(uid: (EntityUid)newUid, component: (Component)temp!, overwrite: true);
-                    }*/
 
                     if (_entityManager.TryGetComponent<SolutionContainerManagerComponent>(ev.Args.TargetEntity, out var oldSolutionManager) && _entityManager.TryGetComponent<SolutionContainerManagerComponent>(newUid, out var newSolutionManager))
                     {
@@ -225,10 +209,10 @@ public sealed class HumanoidGeneticsSystem : SharedHumanoidGeneticsSystem
                             _solutionContainer.RemoveAllSolution(soln);
                         }
                     }
+                    ev.Args.TargetEntity = newUid;
                 }
             }
         }
-
     }
 
     public void OnCauseHumanoidMutationReversion(ref ExecuteEntityEffectEvent<CauseHumanoidMutationReversion> ev)
