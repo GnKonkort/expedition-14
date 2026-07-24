@@ -96,7 +96,33 @@ namespace Content.Client.Stylesheets
         public static readonly Color PanelDark = Color.FromHex("#1E201E");
 
         public static readonly Color NanoGold = Color.FromHex("#A88B5E");
+        public static readonly Color ExpeditionGold = Color.FromHex("#F0A830");
+        public static readonly Color ExpeditionGoldDim = Color.FromHex("#5A4020");
+        public static readonly Color ExpeditionMuted = Color.FromHex("#3A2A10");
+        public static readonly Color ExpeditionReady = Color.FromHex("#4AF0D0");
+        public static readonly Color ExpeditionBg = Color.FromHex("#02030A");
+        public static readonly Color ExpeditionPanel = Color.FromHex("#02030AD9");
+        public static readonly Color ExpeditionPanelBorder = Color.FromHex("#F0A83040");
         public static readonly Color GoodGreenFore = Color.FromHex("#31843E");
+
+        // Expedition lobby style classes
+        public const string StyleClassExpeditionLobbyNavPanel = "ExpeditionLobbyNavPanel";
+        public const string StyleClassExpeditionLobbyChatPanel = "ExpeditionLobbyChatPanel";
+        public const string StyleClassExpeditionLobbyBrandMark = "ExpeditionLobbyBrandMark";
+        public const string StyleClassExpeditionLobbyBrandTitle = "ExpeditionLobbyBrandTitle";
+        public const string StyleClassExpeditionLobbyBrandSubtitle = "ExpeditionLobbyBrandSubtitle";
+        public const string StyleClassExpeditionLobbyMuted = "ExpeditionLobbyMuted";
+        public const string StyleClassExpeditionLobbyGold = "ExpeditionLobbyGold";
+        public const string StyleClassExpeditionLobbySectionHeader = "ExpeditionLobbySectionHeader";
+        public const string StyleClassExpeditionLobbyNavButton = "ExpeditionLobbyNavButton";
+        public const string StyleClassExpeditionLobbyNavSub = "ExpeditionLobbyNavSub";
+        public const string StyleClassExpeditionLobbyNavTitle = "ExpeditionLobbyNavTitle";
+        public const string StyleClassExpeditionLobbySmallButton = "ExpeditionLobbySmallButton";
+        public const string StyleClassExpeditionLobbyReadyBadge = "ExpeditionLobbyReadyBadge";
+        public const string StyleClassExpeditionLobbyReadyBadgeText = "ExpeditionLobbyReadyBadgeText";
+        public const string StyleClassExpeditionLobbyReadyBar = "ExpeditionLobbyReadyBar";
+        public const string StyleClassExpeditionPanel = "ExpeditionPanel";
+        public const string StyleClassExpeditionHeading = "ExpeditionHeading";
         public static readonly Color ConcerningOrangeFore = Color.FromHex("#A5762F");
         public static readonly Color DangerousRedFore = Color.FromHex("#BB3232");
         public static readonly Color DisabledFore = Color.FromHex("#5A5A5A");
@@ -1836,6 +1862,129 @@ namespace Content.Client.Stylesheets
                 Element<PanelContainer>()
                     .Class(StyleClassInset)
                     .Prop(PanelContainer.StylePropertyPanel, insetBack),
+
+                // --- Expedition lobby redesign ---
+                Element<PanelContainer>().Class(StyleClassExpeditionLobbyNavPanel)
+                    .Prop(PanelContainer.StylePropertyPanel, new StyleBoxFlat
+                    {
+                        BackgroundColor = Color.FromHex("#02030AF2"),
+                        BorderColor = Color.FromHex("#F0A83022"),
+                        BorderThickness = new Thickness(1, 0, 0, 0),
+                        Padding = new Thickness(0),
+                    }),
+
+                Element<PanelContainer>().Class(StyleClassExpeditionLobbyChatPanel)
+                    .Prop(PanelContainer.StylePropertyPanel, new StyleBoxFlat
+                    {
+                        BackgroundColor = Color.FromHex("#02030AD9"),
+                        BorderColor = Color.FromHex("#F0A83040"),
+                        BorderThickness = new Thickness(1),
+                        Padding = new Thickness(0),
+                    }),
+
+                Element<PanelContainer>().Class(StyleClassExpeditionLobbyReadyBadge)
+                    .Prop(PanelContainer.StylePropertyPanel, new StyleBoxFlat
+                    {
+                        BackgroundColor = Color.FromHex("#4AF0D014"),
+                        BorderColor = Color.FromHex("#4AF0D059"),
+                        BorderThickness = new Thickness(1),
+                    }),
+
+                Element<PanelContainer>().Class(StyleClassExpeditionPanel)
+                    .Prop(PanelContainer.StylePropertyPanel, new StyleBoxFlat
+                    {
+                        BackgroundColor = Color.FromHex("#02030AE6"),
+                        BorderColor = Color.FromHex("#F0A83040"),
+                        BorderThickness = new Thickness(1),
+                        Padding = new Thickness(6),
+                    }),
+
+                Element<Label>().Class(StyleClassExpeditionLobbyBrandMark)
+                    .Prop(Label.StylePropertyFont, notoSansBold16)
+                    .Prop(Label.StylePropertyFontColor, ExpeditionGold),
+
+                Element<Label>().Class(StyleClassExpeditionLobbyBrandTitle)
+                    .Prop(Label.StylePropertyFont, notoSansBold20)
+                    .Prop(Label.StylePropertyFontColor, ExpeditionGold),
+
+                Element<Label>().Class(StyleClassExpeditionLobbyBrandSubtitle)
+                    .Prop(Label.StylePropertyFont, notoSans8)
+                    .Prop(Label.StylePropertyFontColor, Color.FromHex("#5A4820")),
+
+                Element<Label>().Class(StyleClassExpeditionLobbyMuted)
+                    .Prop(Label.StylePropertyFont, notoSans10)
+                    .Prop(Label.StylePropertyFontColor, ExpeditionGoldDim),
+
+                Element<Label>().Class(StyleClassExpeditionLobbyGold)
+                    .Prop(Label.StylePropertyFont, notoSans10)
+                    .Prop(Label.StylePropertyFontColor, ExpeditionGold),
+
+                Element<Label>().Class(StyleClassExpeditionLobbySectionHeader)
+                    .Prop(Label.StylePropertyFont, notoSans8)
+                    .Prop(Label.StylePropertyFontColor, Color.FromHex("#2A1A08")),
+
+                Element<Label>().Class(StyleClassExpeditionLobbyNavSub)
+                    .Prop(Label.StylePropertyFont, notoSans8)
+                    .Prop(Label.StylePropertyFontColor, Color.FromHex("#1A1008")),
+
+                Element<Label>().Class(StyleClassExpeditionLobbyReadyBadgeText)
+                    .Prop(Label.StylePropertyFont, notoSansBold12)
+                    .Prop(Label.StylePropertyFontColor, ExpeditionReady),
+
+                Element<Label>().Class(StyleClassExpeditionHeading)
+                    .Prop(Label.StylePropertyFont, notoSansBold16)
+                    .Prop(Label.StylePropertyFontColor, ExpeditionGold),
+
+                Element<Label>().Class(StyleClassExpeditionLobbyNavTitle)
+                    .Prop(Label.StylePropertyFont, notoSansBold16)
+                    .Prop(Label.StylePropertyFontColor, ExpeditionGoldDim),
+
+                Element<Button>().Class(StyleClassExpeditionLobbyNavButton)
+                    .Prop(ContainerButton.StylePropertyStyleBox, new StyleBoxFlat
+                    {
+                        BackgroundColor = Color.Transparent,
+                        ContentMarginLeftOverride = 0,
+                        ContentMarginRightOverride = 0,
+                        ContentMarginTopOverride = 0,
+                        ContentMarginBottomOverride = 0,
+                    }),
+                Element<Button>().Class(StyleClassExpeditionLobbyNavButton)
+                    .Pseudo(ContainerButton.StylePseudoClassNormal)
+                    .Prop(Control.StylePropertyModulateSelf, Color.White),
+                Element<Button>().Class(StyleClassExpeditionLobbyNavButton)
+                    .Pseudo(ContainerButton.StylePseudoClassHover)
+                    .Prop(Control.StylePropertyModulateSelf, Color.FromHex("#FFE8B0")),
+                Element<Button>().Class(StyleClassExpeditionLobbyNavButton)
+                    .Pseudo(ContainerButton.StylePseudoClassPressed)
+                    .Prop(Control.StylePropertyModulateSelf, Color.FromHex("#FFE0A0")),
+                Element<Button>().Class(StyleClassExpeditionLobbyNavButton)
+                    .Pseudo(ContainerButton.StylePseudoClassDisabled)
+                    .Prop(Control.StylePropertyModulateSelf, Color.FromHex("#666666")),
+
+                Element<Button>().Class(StyleClassExpeditionLobbySmallButton)
+                    .Prop(ContainerButton.StylePropertyStyleBox, new StyleBoxFlat
+                    {
+                        BackgroundColor = Color.FromHex("#1A1008CC"),
+                        BorderColor = Color.FromHex("#F0A83040"),
+                        BorderThickness = new Thickness(1),
+                        ContentMarginLeftOverride = 8,
+                        ContentMarginRightOverride = 8,
+                        ContentMarginTopOverride = 4,
+                        ContentMarginBottomOverride = 4,
+                    }),
+                Element<Button>().Class(StyleClassExpeditionLobbySmallButton)
+                    .Pseudo(ContainerButton.StylePseudoClassHover)
+                    .Prop(Control.StylePropertyModulateSelf, Color.FromHex("#FFE0A0")),
+
+                Element<ProgressBar>().Class(StyleClassExpeditionLobbyReadyBar)
+                    .Prop(ProgressBar.StylePropertyBackground, new StyleBoxFlat
+                    {
+                        BackgroundColor = Color.FromHex("#1A1008"),
+                    })
+                    .Prop(ProgressBar.StylePropertyForeground, new StyleBoxFlat
+                    {
+                        BackgroundColor = ExpeditionGold,
+                    }),
             }).ToList());
         }
     }

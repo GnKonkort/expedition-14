@@ -1,6 +1,7 @@
-﻿<Button xmlns="https://spacestation14.io">
+﻿<Button xmlns="https://spacestation14.io"
+        StyleClasses="ExpeditionLobbySmallButton">
     <BoxContainer Orientation="Horizontal">
     <TextureRect Name="JobIcon" TextureScale="2 2" Stretch="KeepCentered"/>
-    <Label Name="JobText" Margin="4 0 0 0"/>
+    <Label Name="JobText" Margin="4 0 0 0" StyleClasses="ExpeditionLobbyGold"/>
     </BoxContainer>
 </Button>

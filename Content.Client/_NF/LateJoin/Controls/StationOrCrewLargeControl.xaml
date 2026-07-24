@@ -9,7 +9,7 @@
                            VerticalExpand="True">
     <PanelContainer.PanelOverride>
         <!-- Using PanelBackgroundLight adds padding left and right, so we manually set background color -->
-        <graphics:StyleBoxFlat BackgroundColor="#2F2F3B"/>
+        <graphics:StyleBoxFlat BackgroundColor="#0A0810"/>
     </PanelContainer.PanelOverride>
     <BoxContainer Orientation="Vertical" VerticalExpand="True" Margin="8">
 
@@ -19,6 +19,7 @@
                 MinHeight="100"
                 TextAlign="Center"
                 Margin="4"
+                StyleClasses="ExpeditionLobbySmallButton"
                 StyleIdentifier="mainMenu">
 
             <BoxContainer Orientation="Vertical" VerticalExpand="True" Margin="0 4 0 4">
@@ -26,7 +27,7 @@
                     <Label
                         Text="{Loc 'frontier-lobby-station-title'}"
                         HorizontalExpand="True"
-                        StyleClasses="FancyWindowTitle" />
+                        StyleClasses="ExpeditionHeading" />
 
                     <TextureRect TexturePath="/Textures/_NF/Interface/Misc/arrow-right.png"
                                  HorizontalAlignment="Center"
@@ -35,9 +36,10 @@
                                  VerticalExpand="True"
                                  MinSize="30 30"
                                  MaxSize="30 30"
-                                 Stretch="KeepAspectCentered" />
+                                 Stretch="KeepAspectCentered"
+                                 ModulateSelfOverride="#F0A830" />
                 </BoxContainer>
-                <customControls:HSeparator SeparatorColor="#A3875A" StyleClasses="LowDivider" Margin="0 0 36 0" />
+                <customControls:HSeparator SeparatorColor="#F0A830" StyleClasses="LowDivider" Margin="0 0 36 0" />
 
                 <RichTextLabel Text="{Loc 'frontier-lobby-station-subtext'}" />
 
@@ -54,6 +56,7 @@
                 MinHeight="100"
                 TextAlign="Center"
                 Margin="4 0 4 4"
+                StyleClasses="ExpeditionLobbySmallButton"
                 StyleIdentifier="mainMenu">
 
             <BoxContainer Orientation="Vertical" VerticalExpand="True" Margin="0 4 0 4">
@@ -61,7 +64,7 @@
                     <Label
                         Text="{Loc 'frontier-lobby-crew-title'}"
                         HorizontalExpand="True"
-                        StyleClasses="FancyWindowTitle" />
+                        StyleClasses="ExpeditionHeading" />
 
                     <TextureRect TexturePath="/Textures/_NF/Interface/Misc/arrow-right.png"
                                  HorizontalAlignment="Center"
@@ -70,9 +73,10 @@
                                  VerticalExpand="True"
                                  MinSize="30 30"
                                  MaxSize="30 30"
-                                 Stretch="KeepAspectCentered" />
+                                 Stretch="KeepAspectCentered"
+                                 ModulateSelfOverride="#F0A830" />
                 </BoxContainer>
-                <customControls:HSeparator SeparatorColor="#A3875A" StyleClasses="LowDivider" Margin="0 0 36 0" />
+                <customControls:HSeparator SeparatorColor="#F0A830" StyleClasses="LowDivider" Margin="0 0 36 0" />
 
                 <RichTextLabel Text="{Loc 'frontier-lobby-crew-subtext'}" />
 

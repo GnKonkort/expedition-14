@@ -229,7 +229,7 @@ namespace Content.Server.Administration.Managers
                     }
                 }
 
-                if (player.ContentData()!.Stealthed)
+                if (player.ContentData()?.Stealthed == true)
                 {
                     aData.Stealth = true;
                 }
@@ -390,7 +390,8 @@ namespace Content.Server.Administration.Managers
 
             _admins.Add(session, reg);
 
-            if (session.ContentData()!.Stealthed)
+            // ContentData may still be unset during early login / race with disconnect.
+            if (session.ContentData()?.Stealthed == true)
                 reg.Data.Stealth = true;
 
             if (reg.Data.Active)

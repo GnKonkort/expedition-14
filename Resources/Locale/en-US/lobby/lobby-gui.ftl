@@ -6,3 +6,24 @@ ui-lobby-observe-button = Observe
 ui-lobby-ready-up-button = Ready Up
 ui-lobby-online-players-block = Online Players
 ui-lobby-server-info-block = Server Info
+
+ui-lobby-expedition-brand = EXPEDITION
+ui-lobby-expedition-subtitle = SPACE STATION 14 // FORK v0.1.0
+ui-lobby-expedition-nav-header = // НАВИГАЦИЯ
+ui-lobby-expedition-chat-header = // ОБЩИЙ ЧАТ
+ui-lobby-expedition-footer = // EXPEDITION 2026
+ui-lobby-expedition-play = ИГРАТЬ
+ui-lobby-expedition-play-sub = Присоединиться к экспедиции
+ui-lobby-expedition-play-sub-ready = Отменить готовность
+ui-lobby-expedition-play-sub-join = Войти в раунд
+ui-lobby-expedition-character = ПЕРСОНАЖ
+ui-lobby-expedition-character-sub = Управление профилем
+ui-lobby-expedition-settings = НАСТРОЙКИ
+ui-lobby-expedition-settings-sub = Конфигурация системы
+ui-lobby-expedition-quit = ВЫЙТИ
+ui-lobby-expedition-quit-sub = Покинуть станцию
+ui-lobby-expedition-ready-count = Готовы {$ready} ({$total})
+ui-lobby-expedition-ready-count-markup = Готовы [color=#F0A830]{$ready}[/color] [color=#2A1A08]({$total})[/color]
+ui-lobby-expedition-chat-msg-count = {$count} МСГ
+ui-lobby-expedition-ready-badge = ГОТОВ
+ui-lobby-expedition-join-title = Войти в игру

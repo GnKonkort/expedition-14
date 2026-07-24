@@ -66,12 +66,13 @@ namespace Content.Client.Lobby
                 ? Loc.GetString("ui-lobby-title", ("serverName", serverName))
                 : lobbyNameCvar;
 
-            var width = _cfg.GetCVar(CCVars.ServerLobbyRightPanelWidth);
-            Lobby.RightSide.SetWidth = width;
+            // Fixed Figma rail width — ignore upstream lobby panel CVar.
+            Lobby.RightSide.SetWidth = 320;
 
             UpdateLobbyUi();
 
             Lobby.CharacterPreview.CharacterSetupButton.OnPressed += OnSetupPressed;
+            Lobby.CharacterNavButton.OnPressed += OnSetupPressed;
             Lobby.ReadyButton.OnPressed += OnReadyPressed;
             Lobby.ReadyButton.OnToggled += OnReadyToggled;
 
@@ -92,6 +93,7 @@ namespace Content.Client.Lobby
             _voteManager.ClearPopupContainer();
 
             Lobby!.CharacterPreview.CharacterSetupButton.OnPressed -= OnSetupPressed;
+            Lobby!.CharacterNavButton.OnPressed -= OnSetupPressed;
             Lobby!.ReadyButton.OnPressed -= OnReadyPressed;
             Lobby!.ReadyButton.OnToggled -= OnReadyToggled;
 
@@ -185,7 +187,6 @@ namespace Content.Client.Lobby
         {
             if (_gameTicker.IsGameStarted)
             {
-                Lobby!.ReadyButton.Text = Loc.GetString("lobby-state-ready-button-join-state");
                 Lobby!.ReadyButton.ToggleMode = false;
                 Lobby!.ReadyButton.Pressed = false;
                 Lobby!.ObserveButton.Disabled = false;
@@ -193,12 +194,17 @@ namespace Content.Client.Lobby
             else
             {
                 Lobby!.StartTime.Text = string.Empty;
-                Lobby!.ReadyButton.Text = Loc.GetString(Lobby!.ReadyButton.Pressed ? "lobby-state-player-status-ready": "lobby-state-player-status-not-ready");
                 Lobby!.ReadyButton.ToggleMode = true;
                 Lobby!.ReadyButton.Disabled = false;
                 Lobby!.ReadyButton.Pressed = _gameTicker.AreWeReady;
                 Lobby!.ObserveButton.Disabled = true;
             }
+
+            Lobby!.UpdateReadyVisuals(
+                _gameTicker.IsGameStarted,
+                _gameTicker.AreWeReady,
+                _gameTicker.ReadyCount,
+                _gameTicker.PlayerCount);
 
             if (_gameTicker.ServerInfoBlob != null)
             {
@@ -257,15 +263,7 @@ namespace Content.Client.Lobby
 
         private void UpdateLobbyBackground()
         {
-            if (_gameTicker.LobbyBackground != null)
-            {
-                Lobby!.Background.Texture = _resourceCache.GetResource<TextureResource>(_gameTicker.LobbyBackground );
-            }
-            else
-            {
-                Lobby!.Background.Texture = null;
-            }
-
+            // Expedition lobby uses the procedural black-hole background instead of lobbyscreen art.
         }
 
         private void SetReady(bool newReady)

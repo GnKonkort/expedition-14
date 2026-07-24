@@ -24,7 +24,7 @@
 
                 <Label Name="StationName"
                     HorizontalExpand="True"
-                    StyleClasses="FancyWindowTitle"/>
+                    StyleClasses="ExpeditionHeading"/>
 
                 <RichTextLabel Name="StationSubtext"/>
             </BoxContainer>

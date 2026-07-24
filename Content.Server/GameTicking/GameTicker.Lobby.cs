@@ -39,6 +39,9 @@ namespace Content.Server.GameTicking
         public void UpdateInfoText()
         {
             RaiseNetworkEvent(GetInfoMsg(), Filter.Empty().AddPlayers(_playerManager.NetworkedSessions));
+            // Keep lobby ready/player counters in sync for all clients.
+            if (RunLevel == GameRunLevel.PreRoundLobby)
+                SendStatusToAll();
         }
 
         private string GetInfoText()
@@ -95,7 +98,9 @@ namespace Content.Server.GameTicking
         private TickerLobbyStatusEvent GetStatusMsg(ICommonSession session)
         {
             _playerGameStatuses.TryGetValue(session.UserId, out var status);
-            return new TickerLobbyStatusEvent(RunLevel != GameRunLevel.PreRoundLobby, LobbyBackground, status == PlayerGameStatus.ReadyToPlay, _roundStartTime, RoundPreloadTime, RoundStartTimeSpan, Paused);
+            var readyCount = _playerGameStatuses.Values.Count(x => x == PlayerGameStatus.ReadyToPlay);
+            var playerCount = _playerManager.PlayerCount - (_cfg.GetCVar(HCCVars.EnableQueue) ? _joinQueue.PlayerInQueueCount : 0);
+            return new TickerLobbyStatusEvent(RunLevel != GameRunLevel.PreRoundLobby, LobbyBackground, status == PlayerGameStatus.ReadyToPlay, _roundStartTime, RoundPreloadTime, RoundStartTimeSpan, Paused, readyCount, playerCount);
         }
 
         private void SendStatusToAll()
@@ -176,8 +181,7 @@ namespace Content.Server.GameTicking
 
             var status = ready ? PlayerGameStatus.ReadyToPlay : PlayerGameStatus.NotReadyToPlay;
             _playerGameStatuses[player.UserId] = ready ? PlayerGameStatus.ReadyToPlay : PlayerGameStatus.NotReadyToPlay;
-            RaiseNetworkEvent(GetStatusMsg(player), player.Channel);
-            // update server info to reflect new ready count
+            // update server info / lobby counters for all clients
             UpdateInfoText();
         }
 

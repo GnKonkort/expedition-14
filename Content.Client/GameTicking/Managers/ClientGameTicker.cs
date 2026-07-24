@@ -32,6 +32,8 @@ namespace Content.Client.GameTicking.Managers
         [ViewVariables] public string? ServerInfoBlob { get; private set; }
         [ViewVariables] public TimeSpan StartTime { get; private set; }
         [ViewVariables] public new bool Paused { get; private set; }
+        [ViewVariables] public int ReadyCount { get; private set; }
+        [ViewVariables] public int PlayerCount { get; private set; }
 
         [ViewVariables] public IReadOnlyDictionary<NetEntity, StationJobInformation> StationJobInformationList => _stationJobInformationList;
 
@@ -120,6 +122,8 @@ namespace Content.Client.GameTicking.Managers
             AreWeReady = message.YouAreReady;
             LobbyBackground = message.LobbyBackground;
             Paused = message.Paused;
+            ReadyCount = message.ReadyCount;
+            PlayerCount = message.PlayerCount;
 
             LobbyStatusUpdated?.Invoke();
         }

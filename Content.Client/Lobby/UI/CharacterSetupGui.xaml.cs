@@ -10,6 +10,7 @@ using Robust.Client.UserInterface;
 using Robust.Client.UserInterface.Controls;
 using Robust.Client.UserInterface.XAML;
 using Robust.Shared.Configuration;
+using Robust.Shared.Maths;
 using Robust.Shared.Prototypes;
 
 namespace Content.Client.Lobby.UI
@@ -40,7 +41,7 @@ namespace Content.Client.Lobby.UI
             var back = new StyleBoxTexture
             {
                 Texture = panelTex,
-                Modulate = new Color(37, 37, 42)
+                Modulate = Color.FromHex("#02030A")
             };
             back.SetPatchMargin(StyleBox.Margin.All, 10);
 

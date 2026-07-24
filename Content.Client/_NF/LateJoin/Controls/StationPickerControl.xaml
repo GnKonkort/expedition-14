@@ -9,7 +9,7 @@
         <PanelContainer VerticalExpand="True" SetWidth="380">
             <PanelContainer.PanelOverride>
                 <!-- Using PanelBackgroundLight adds padding left and right, so we manually set background color -->
-                <graphics:StyleBoxFlat BackgroundColor="#2F2F3B"/>
+                <graphics:StyleBoxFlat BackgroundColor="#0A0810"/>
             </PanelContainer.PanelOverride>
             <BoxContainer Orientation="Vertical"
                           VerticalExpand="True"
@@ -27,7 +27,7 @@
 
         <PanelContainer VerticalExpand="True" HorizontalExpand="True">
             <PanelContainer.PanelOverride>
-                <graphics:StyleBoxFlat BackgroundColor="#25252a"/>
+                <graphics:StyleBoxFlat BackgroundColor="#02030A"/>
             </PanelContainer.PanelOverride>
             <BoxContainer Orientation="Vertical"
                           VerticalExpand="True"
@@ -38,13 +38,13 @@
                               Margin="20">
                     <Label Name="StationName"
                            HorizontalExpand="True"
-                           StyleClasses="FancyWindowTitle"/>
+                           StyleClasses="ExpeditionHeading"/>
                     <RichTextLabel Name="StationDescription"/>
                 </BoxContainer>
 
                 <Label Text="{Loc 'frontier-lobby-available-jobs'}"
                        Margin="20 4 0 4"
-                       StyleClasses="FancyWindowTitle"/>
+                       StyleClasses="ExpeditionHeading"/>
 
                 <ScrollContainer HorizontalExpand="True"
                                  VerticalExpand="True"
