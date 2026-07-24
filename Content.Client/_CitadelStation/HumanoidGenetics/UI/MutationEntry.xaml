@@ -1,0 +1,27 @@
+<Control xmlns="https://spacestation14.io"
+         xmlns:customControls="clr-namespace:Content.Client.Genetics.UI"
+         xmlns:graphics="clr-namespace:Robust.Client.Graphics;assembly=Robust.Client"
+         HorizontalExpand="True">
+
+    <PanelContainer StyleClasses="LowDivider" HorizontalExpand="True">
+        <PanelContainer.PanelOverride>
+            <!-- Slightly lighter than the scroll background to make it pop -->
+            <graphics:StyleBoxFlat BackgroundColor="#1A1A2E"/>
+        </PanelContainer.PanelOverride>
+
+        <BoxContainer Orientation="Horizontal" HorizontalExpand="True" SeparationOverride="10" Margin="4 4 4 4">
+
+            <!-- Left Side: Name and Description -->
+            <BoxContainer Orientation="Vertical" VerticalExpand="True" VerticalAlignment="Center" SeparationOverride="2" HorizontalAlignment="Stretch" HorizontalExpand="True" >
+                <Label Name="MutationName" Text="Mutation Name" StyleClasses="LabelSubText" FontColorOverride="#E0E0E0" />
+                <Label Name="MutationDescription" Text="Description goes here..." StyleClasses="LabelSmallText" FontColorOverride="#8888A0"/>
+            </BoxContainer>
+
+            <!-- Right Side: Select Button -->
+            <!-- We use a custom class for the button so we can easily style the text in code -->
+            <Button Name="SelectButton" Text="Select" MinSize="80 32" VerticalAlignment="Center" StyleClasses="ButtonSquare">
+                <Label Name="SelectButtonLabel" HorizontalExpand="True" />
+            </Button>
+        </BoxContainer>
+    </PanelContainer>
+</Control>

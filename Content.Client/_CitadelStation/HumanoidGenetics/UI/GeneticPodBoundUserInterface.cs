@@ -12,14 +12,18 @@ public sealed class GeneticPodBoundUserInterface(EntityUid owner, Enum uiKey) : 
 
         if (_window is null)
             _window = this.CreateWindow<GeneticPod>();
-
     }
 
      protected override void UpdateState(BoundUserInterfaceState state)
     {
         base.UpdateState(state);
 
-        if (state is GeneticPodBoundUserInterfaceState s)
-            _window?.UpdateState(s);
+        if (state is not GeneticPodBoundUserInterfaceState s)
+            return;
+
+        if (_window == null)
+            return;
+
+        _window.UpdateState(s);
     }
 }

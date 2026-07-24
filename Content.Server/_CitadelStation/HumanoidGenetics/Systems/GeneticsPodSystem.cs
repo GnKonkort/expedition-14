@@ -50,21 +50,27 @@ public sealed class GeneticsPodSystem : SharedGeneticsPodSystem {
         }
     }
 
-    private void OpenScaner(Entity<GeneticPodComponent> ent, EntityUid actor)
+    private void OpenScaner(Entity<GeneticPodComponent> ent, EntityUid? actor)
     {
         if (ent.Comp.BodyContainer.ContainedEntity == null)
+            return;
+
+        if (actor == null || actor.Value == null || actor.HasValue == false)
             return;
 
         if (!TryComp<HumanoidGeneContainerComponent>(ent.Comp.BodyContainer.ContainedEntity, out var geneContainer))
             return;
 
-        if (!_uiSystem.TryOpenUi(ent.Owner, GeneticPodUiKey.Key, actor))
+        if (!_uiSystem.TryOpenUi(ent.Owner, GeneticPodUiKey.Key, actor.Value))
             return;
 
 
         var mutationsList = geneContainer.AppliedMutations;
+        var state = new GeneticPodBoundUserInterfaceState(mutationsList, GetNetEntity(ent.Comp.BodyContainer.ContainedEntity));
 
-        _uiSystem.SetUiState(actor, GeneticPodUiKey.Key, new GeneticPodBoundUserInterfaceState(mutationsList, GetNetEntity(actor)));
+        _saw.Debug($"Sending state {state.Mutations}, {state.TargetEntity}");
+
+        _uiSystem.SetUiState(ent.Owner, GeneticPodUiKey.Key, state);
     }
 
     private void EjectBody(Entity<GeneticPodComponent> ent)

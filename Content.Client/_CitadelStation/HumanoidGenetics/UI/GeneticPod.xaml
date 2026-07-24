@@ -1,9 +1,81 @@
 <controls:FancyWindow xmlns="https://spacestation14.io"
-    xmlns:controls="clr-namespace:Content.Client.UserInterface.Controls"
-    xmlns:ui="clr-namespace:Content.Client.UserInterface"
-    xmlns:customControls="clr-namespace:Content.Client.Administration.UI.CustomControls"
-    xmlns:graphics="clr-namespace:Robust.Client.Graphics;assembly=Robust.Client">
+                    xmlns:controls="clr-namespace:Content.Client.UserInterface.Controls"
+                    xmlns:customControls="clr-namespace:Content.Client.Genetics.UI"
+                    xmlns:graphics="clr-namespace:Robust.Client.Graphics;assembly=Robust.Client"
+                    Title="Test"
+                    MinSize="520 600"
+                    SetSize="540 620">
 
+    <!-- Main background container -->
+    <PanelContainer StyleClasses="AngleRect" HorizontalExpand="True" VerticalExpand="True">
+        <PanelContainer.PanelOverride>
+            <graphics:StyleBoxFlat BackgroundColor="#1E1E2E"/>
+        </PanelContainer.PanelOverride>
+        <BoxContainer Orientation="Vertical" Margin="12 12 12 12" SeparationOverride="12">
+            <PanelContainer StyleClasses="LowDivider">
+                <PanelContainer.PanelOverride>
+                    <graphics:StyleBoxFlat BackgroundColor="#232336"/>
+                </PanelContainer.PanelOverride>
+                <BoxContainer Orientation="Horizontal" HorizontalExpand="True" VerticalAlignment="Center" SeparationOverride="8">
+                    <PanelContainer MinSize="12 12" Name="PowerLight">
+                        <PanelContainer.PanelOverride>
+                            <graphics:StyleBoxFlat BackgroundColor="#333333" />
+                        </PanelContainer.PanelOverride>
+                    </PanelContainer>
+                    <Label Name="StatusText" Text="STANDBY" StyleClasses="LabelKeyText" FontColorOverride="#C17070" HorizontalExpand="True" VerticalAlignment="Center" />
+                    <Label Text="U clearance required" StyleClasses="LabelSmallText" FontColorOverride="#555570" VerticalAlignment="Center" />
+                </BoxContainer>
+            </PanelContainer>
+            <!-- TOP SECTION: Player Info -->
+            <PanelContainer StyleClasses="LowDivider">
+                <PanelContainer.PanelOverride>
+                    <graphics:StyleBoxFlat BackgroundColor="#262637"/>
+                </PanelContainer.PanelOverride>
 
-    <Label Text= "It just works It just works!" />
+                <BoxContainer Orientation="Horizontal" SeparationOverride="12" VerticalAlignment="Center" Margin="4,4,4,4">
+                    <!-- Sprite View -->
+                    <PanelContainer StyleClasses="AngleRect" MinSize="64 64">
+                        <PanelContainer.PanelOverride>
+                            <graphics:StyleBoxFlat BackgroundColor="#12121F"/>
+                        </PanelContainer.PanelOverride>
+                        <SpriteView OverrideDirection="South" Scale="2 2" Name="PatientSprite" Access="Public" SetSize="64 64" />
+                    </PanelContainer>
+
+                    <!-- Text Info -->
+                    <BoxContainer Orientation="Vertical" VerticalExpand="True" VerticalAlignment="Center" SeparationOverride="4">
+                        <Label Name="PatientName" Text="Unknown Subject" StyleClasses="LabelHeading" FontColorOverride="#E0E0E0" />
+                        <Label Name="PatientRace" Text="Species: Human" StyleClasses="LabelSubText" FontColorOverride="#A0A0B0" />
+                        <Label Name="PatientSex" Text="Age: 25" StyleClasses="LabelSubText" FontColorOverride="#A0A0B0" />
+                    </BoxContainer>
+                </BoxContainer>
+            </PanelContainer>
+
+            <!-- MIDDLE SECTION: Entity Mutations -->
+            <BoxContainer Orientation="Vertical" SeparationOverride="6">
+                <Label Text="Active Mutations" StyleClasses="LabelHeading" FontColorOverride="#C17070" Margin="0 0 0 4" />
+                <PanelContainer StyleClasses="LowDivider" VerticalExpand="True" MinSize="0 200">
+                    <PanelContainer.PanelOverride>
+                        <graphics:StyleBoxFlat BackgroundColor="#12121F"/>
+                    </PanelContainer.PanelOverride>
+                    <ScrollContainer HScrollEnabled="False" VerticalExpand="True">
+                        <BoxContainer Name="EntityMutationsList" Orientation="Vertical" SeparationOverride="4" />
+                    </ScrollContainer>
+                </PanelContainer>
+            </BoxContainer>
+
+            <!-- BOTTOM SECTION: Sequencer Storage -->
+            <BoxContainer Orientation="Vertical" SeparationOverride="6" VerticalExpand="True">
+                <Label Text="Sequencer Storage" StyleClasses="LabelHeading" FontColorOverride="#C17070" Margin="0 0 0 4" />
+                <PanelContainer StyleClasses="LowDivider" VerticalExpand="True">
+                    <PanelContainer.PanelOverride>
+                        <graphics:StyleBoxFlat BackgroundColor="#12121F"/>
+                    </PanelContainer.PanelOverride>
+                    <ScrollContainer HScrollEnabled="False" VerticalExpand="True">
+                        <BoxContainer Name="SequencerMutationsList" Orientation="Vertical" SeparationOverride="4" />
+                    </ScrollContainer>
+                </PanelContainer>
+            </BoxContainer>
+
+        </BoxContainer>
+    </PanelContainer>
 </controls:FancyWindow>

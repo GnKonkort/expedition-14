@@ -20,4 +20,35 @@
   polymorphEntity: MobDwarf
   marking: TattooCampbellLeftLeg
 
+- type: humanoidMutation
+  id: ExampleMutation2
+  name: Example
+  effects:
+    - !type:EvenHealthChange
+        damage:
+          Brute: -0.5
+  chance: 1.0
+  polymorphEntity: MobDwarf
+  marking: TattooCampbellLeftLeg
+
+- type: humanoidMutation
+  id: ExampleMutation3
+  name: Example
+  effects:
+    - !type:EvenHealthChange
+        damage:
+          Brute: -0.5
+  chance: 1.0
+  marking: TattooCampbellLeftLeg
+
+- type: humanoidMutation
+  id: ExampleMutation4
+  name: Example
+  effects:
+    - !type:EvenHealthChange
+        damage:
+          Brute: -0.5
+  chance: 1.0
+  marking: TattooCampbellLeftLeg
+
 
