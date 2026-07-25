@@ -21,7 +21,7 @@ public sealed partial class MutationEntry : Control
         SelectButton.Text = actionText;
 
         // Apply the accent color to the button text
-        SelectButtonLabel.FontColorOverride = Color.FromHex("#C17070");
+        SelectButton.FontColorOverride = Color.FromHex("#C17070");
     }
 
     /// <summary>
