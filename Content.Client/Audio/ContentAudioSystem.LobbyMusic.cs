@@ -10,7 +10,6 @@ using Robust.Client.State;
 using Robust.Shared.Audio;
 using Robust.Shared.Audio.Systems;
 using Robust.Shared.Player;
-using Robust.Shared.Timing;
 using Robust.Shared.Utility;
 
 namespace Content.Client.Audio;
@@ -168,7 +167,7 @@ public sealed partial class ContentAudioSystem
             return;
         }
 
-        PlaySoundtrack(playlist[0]);
+        PlaySoundtrack(playlist[_random.Next(playlist.Length)]);
     }
 
     private void PlaySoundtrack(string soundtrackFilename)

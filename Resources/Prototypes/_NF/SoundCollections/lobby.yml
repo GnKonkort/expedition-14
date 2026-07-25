@@ -1,4 +1,5 @@
-# Lobby music disabled — empty playlist (no tracks play).
 - type: soundCollection
   id: NFLobbyMusic
-  files: []
+  files:
+  - /Audio/Lobby/event_horizon.ogg
+  - /Audio/Lobby/deadnet_theory.ogg

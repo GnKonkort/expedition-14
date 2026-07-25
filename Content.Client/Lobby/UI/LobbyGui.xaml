@@ -8,7 +8,7 @@
     xmlns:widgets="clr-namespace:Content.Client.UserInterface.Systems.Chat.Widgets"
     xmlns:gfx="clr-namespace:Robust.Client.Graphics;assembly=Robust.Client">
 
-    <lobbyUi:LobbyBlackHoleControl Access="Public" Name="AnimatedBackground"
+    <lobbyUi:LobbyBackgroundControl Access="Public" Name="AnimatedBackground"
                                    HorizontalExpand="True" VerticalExpand="True" />
     <lobbyUi:LobbyFxOverlay Name="FxOverlay" MouseFilter="Ignore" />
     <TextureRect Access="Public" Name="Background" Visible="False" />
@@ -19,17 +19,17 @@
             <Control Name="DefaultState" VerticalExpand="True" HorizontalExpand="True">
                 <!-- Brand -->
                 <BoxContainer Orientation="Vertical" HorizontalAlignment="Left" VerticalAlignment="Top"
-                              Margin="36 36 0 0" SeparationOverride="2">
-                    <BoxContainer Name="PixelLogo" Access="Public" Margin="0 0 0 10" />
-                    <Label Text="{Loc 'ui-lobby-expedition-brand'}"
+                              Margin="32 32 0 0" SeparationOverride="2">
+                    <BoxContainer Name="PixelLogo" Access="Public" Margin="0 0 0 8" />
+                    <Label Name="BrandTitle" Access="Public" Text="{Loc 'ui-lobby-expedition-brand'}"
                            StyleClasses="ExpeditionLobbyBrandTitle"
-                           FontColorOverride="#F0A830" />
-                    <Label Text="{Loc 'ui-lobby-expedition-subtitle'}"
+                           FontColorOverride="#E03030" />
+                    <Label Name="BrandSubtitle" Access="Public" Text="{Loc 'ui-lobby-expedition-subtitle'}"
                            StyleClasses="ExpeditionLobbyBrandSubtitle"
-                           FontColorOverride="#5A4820"
-                           Margin="0 4 0 0" />
+                           FontColorOverride="#8B3030"
+                           Margin="0 6 0 0" />
                     <BoxContainer Name="BrandDash" Access="Public" Orientation="Horizontal"
-                                  SeparationOverride="2" Margin="0 8 0 0" />
+                                  SeparationOverride="2" Margin="0 10 0 0" />
                     <Label Name="ServerName" Access="Public" Visible="False" />
                 </BoxContainer>
 
@@ -44,22 +44,22 @@
                               MinWidth="280" MinHeight="180"
                               MaxWidth="640" MaxHeight="520"
                               SetWidth="300" SetHeight="240">
-                    <PanelContainer StyleClasses="ExpeditionLobbyChatPanel" VerticalExpand="True" HorizontalExpand="True">
+                    <PanelContainer Name="ChatOuterPanel" Access="Public" StyleClasses="ExpeditionLobbyChatPanel" VerticalExpand="True" HorizontalExpand="True">
                         <BoxContainer Orientation="Vertical" VerticalExpand="True" HorizontalExpand="True">
                             <BoxContainer Orientation="Horizontal" Margin="10 8 10 4" SeparationOverride="8">
-                                <PanelContainer MinSize="6 6" MaxSize="6 6" VerticalAlignment="Center">
+                                <PanelContainer Name="ChatHeaderDot" Access="Public" MinSize="6 6" MaxSize="6 6" VerticalAlignment="Center">
                                     <PanelContainer.PanelOverride>
-                                        <gfx:StyleBoxFlat BackgroundColor="#F0A830" />
+                                        <gfx:StyleBoxFlat BackgroundColor="#E03030" />
                                     </PanelContainer.PanelOverride>
                                 </PanelContainer>
-                                <Label Text="{Loc 'ui-lobby-expedition-chat-header'}"
+                                <Label Name="ChatHeaderLabel" Access="Public" Text="{Loc 'ui-lobby-expedition-chat-header'}"
                                        StyleClasses="ExpeditionLobbyGold"
-                                       FontColorOverride="#F0A830"
+                                       FontColorOverride="#E03030"
                                        VerticalAlignment="Center" />
                                 <Control HorizontalExpand="True" />
                                 <Label Name="ChatMsgCount" Access="Public"
                                        Text="0 МСГ"
-                                       FontColorOverride="#3A2A10"
+                                       FontColorOverride="#3A1010"
                                        StyleClasses="ExpeditionLobbyMuted"
                                        VerticalAlignment="Center" />
                                 <!-- Top-right resize grip -->
@@ -105,8 +105,9 @@
 
                 <!-- Centered nav stack -->
                 <BoxContainer Orientation="Vertical" SeparationOverride="0">
-                    <Label Text="{Loc 'ui-lobby-expedition-nav-header'}"
-                           FontColorOverride="#2A1A08"
+                    <Label Name="NavHeaderLabel" Access="Public"
+                           Text="{Loc 'ui-lobby-expedition-nav-header'}"
+                           FontColorOverride="#3A1010"
                            StyleClasses="ExpeditionLobbySectionHeader"
                            Margin="0 0 0 20" />
 
@@ -147,24 +148,24 @@
                                             MinSize="3 8" MaxSize="3 8"
                                             VerticalAlignment="Center">
                                 <PanelContainer.PanelOverride>
-                                    <gfx:StyleBoxFlat BackgroundColor="#2A1A08" />
+                                    <gfx:StyleBoxFlat BackgroundColor="#200808" />
                                 </PanelContainer.PanelOverride>
                             </PanelContainer>
                             <BoxContainer Orientation="Vertical" SeparationOverride="3" HorizontalExpand="True">
                                 <Label Name="ReadyTitle" Access="Public"
                                        Text="{Loc 'ui-lobby-expedition-play'}"
                                        StyleClasses="ExpeditionLobbyNavTitle"
-                                       FontColorOverride="#5A4020" />
+                                       FontColorOverride="#5A2020" />
                                 <Label Name="PlaySubLabel" Access="Public"
                                        Text="{Loc 'ui-lobby-expedition-play-sub'}"
                                        StyleClasses="ExpeditionLobbyNavSub"
-                                       FontColorOverride="#1A1008" />
+                                       FontColorOverride="#1A0808" />
                             </BoxContainer>
                         </BoxContainer>
                     </Button>
                     <PanelContainer Name="ReadyHairline" Access="Public" MinHeight="1" MaxHeight="1" HorizontalExpand="True">
                         <PanelContainer.PanelOverride>
-                            <gfx:StyleBoxFlat BackgroundColor="#2A1A0880" />
+                            <gfx:StyleBoxFlat BackgroundColor="#20080880" />
                         </PanelContainer.PanelOverride>
                     </PanelContainer>
 
@@ -175,24 +176,24 @@
                             <PanelContainer Name="CharacterAccent" Access="Public"
                                             MinSize="3 8" MaxSize="3 8" VerticalAlignment="Center">
                                 <PanelContainer.PanelOverride>
-                                    <gfx:StyleBoxFlat BackgroundColor="#2A1A08" />
+                                    <gfx:StyleBoxFlat BackgroundColor="#200808" />
                                 </PanelContainer.PanelOverride>
                             </PanelContainer>
                             <BoxContainer Orientation="Vertical" SeparationOverride="3" HorizontalExpand="True">
                                 <Label Name="CharacterTitle" Access="Public"
                                        Text="{Loc 'ui-lobby-expedition-character'}"
                                        StyleClasses="ExpeditionLobbyNavTitle"
-                                       FontColorOverride="#5A4020" />
+                                       FontColorOverride="#5A2020" />
                                 <Label Name="CharacterSub" Access="Public"
                                        Text="{Loc 'ui-lobby-expedition-character-sub'}"
                                        StyleClasses="ExpeditionLobbyNavSub"
-                                       FontColorOverride="#1A1008" />
+                                       FontColorOverride="#1A0808" />
                             </BoxContainer>
                         </BoxContainer>
                     </Button>
                     <PanelContainer Name="CharacterHairline" Access="Public" MinHeight="1" MaxHeight="1" HorizontalExpand="True">
                         <PanelContainer.PanelOverride>
-                            <gfx:StyleBoxFlat BackgroundColor="#2A1A0880" />
+                            <gfx:StyleBoxFlat BackgroundColor="#20080880" />
                         </PanelContainer.PanelOverride>
                     </PanelContainer>
 
@@ -203,24 +204,24 @@
                             <PanelContainer Name="SettingsAccent" Access="Public"
                                             MinSize="3 8" MaxSize="3 8" VerticalAlignment="Center">
                                 <PanelContainer.PanelOverride>
-                                    <gfx:StyleBoxFlat BackgroundColor="#2A1A08" />
+                                    <gfx:StyleBoxFlat BackgroundColor="#200808" />
                                 </PanelContainer.PanelOverride>
                             </PanelContainer>
                             <BoxContainer Orientation="Vertical" SeparationOverride="3" HorizontalExpand="True">
                                 <Label Name="SettingsTitle" Access="Public"
                                        Text="{Loc 'ui-lobby-expedition-settings'}"
                                        StyleClasses="ExpeditionLobbyNavTitle"
-                                       FontColorOverride="#5A4020" />
+                                       FontColorOverride="#5A2020" />
                                 <Label Name="SettingsSub" Access="Public"
                                        Text="{Loc 'ui-lobby-expedition-settings-sub'}"
                                        StyleClasses="ExpeditionLobbyNavSub"
-                                       FontColorOverride="#1A1008" />
+                                       FontColorOverride="#1A0808" />
                             </BoxContainer>
                         </BoxContainer>
                     </Button>
                     <PanelContainer Name="SettingsHairline" Access="Public" MinHeight="1" MaxHeight="1" HorizontalExpand="True">
                         <PanelContainer.PanelOverride>
-                            <gfx:StyleBoxFlat BackgroundColor="#2A1A0880" />
+                            <gfx:StyleBoxFlat BackgroundColor="#20080880" />
                         </PanelContainer.PanelOverride>
                     </PanelContainer>
 
@@ -231,31 +232,54 @@
                             <PanelContainer Name="QuitAccent" Access="Public"
                                             MinSize="3 8" MaxSize="3 8" VerticalAlignment="Center">
                                 <PanelContainer.PanelOverride>
-                                    <gfx:StyleBoxFlat BackgroundColor="#2A1A08" />
+                                    <gfx:StyleBoxFlat BackgroundColor="#200808" />
                                 </PanelContainer.PanelOverride>
                             </PanelContainer>
                             <BoxContainer Orientation="Vertical" SeparationOverride="3" HorizontalExpand="True">
                                 <Label Name="QuitTitle" Access="Public"
                                        Text="{Loc 'ui-lobby-expedition-quit'}"
                                        StyleClasses="ExpeditionLobbyNavTitle"
-                                       FontColorOverride="#5A4020" />
+                                       FontColorOverride="#5A2020" />
                                 <Label Name="QuitSub" Access="Public"
                                        Text="{Loc 'ui-lobby-expedition-quit-sub'}"
                                        StyleClasses="ExpeditionLobbyNavSub"
-                                       FontColorOverride="#1A1008" />
+                                       FontColorOverride="#1A0808" />
                             </BoxContainer>
                         </BoxContainer>
                     </Button>
                     <PanelContainer Name="QuitHairline" Access="Public" MinHeight="1" MaxHeight="1" HorizontalExpand="True">
                         <PanelContainer.PanelOverride>
-                            <gfx:StyleBoxFlat BackgroundColor="#2A1A0880" />
+                            <gfx:StyleBoxFlat BackgroundColor="#20080880" />
                         </PanelContainer.PanelOverride>
                     </PanelContainer>
 
-                    <Label Text="{Loc 'ui-lobby-expedition-footer'}"
-                           FontColorOverride="#1A1008"
+                    <!-- Background view switcher (‹ ВИД ›) -->
+                    <BoxContainer Orientation="Horizontal" SeparationOverride="10" Margin="0 16 0 0">
+                        <Button Name="BgPrevButton" Access="Public"
+                                StyleClasses="ExpeditionLobbyNavButton"
+                                Text="‹" MinWidth="28" />
+                        <BoxContainer Orientation="Vertical" HorizontalExpand="True"
+                                      HorizontalAlignment="Center">
+                            <Label Name="BgViewHeader" Access="Public"
+                                   Text="{Loc 'ui-lobby-expedition-bg-header'}"
+                                   HorizontalAlignment="Center"
+                                   FontColorOverride="#3A1010"
+                                   StyleClasses="ExpeditionLobbySectionHeader" />
+                            <Label Name="BgViewLabel" Access="Public"
+                                   Text="{Loc 'ui-lobby-expedition-bg-server'}"
+                                   HorizontalAlignment="Center"
+                                   FontColorOverride="#E03030"
+                                   StyleClasses="ExpeditionLobbyGold" />
+                        </BoxContainer>
+                        <Button Name="BgNextButton" Access="Public"
+                                StyleClasses="ExpeditionLobbyNavButton"
+                                Text="›" MinWidth="28" />
+                    </BoxContainer>
+
+                    <Label Name="FooterLabel" Access="Public" Text="{Loc 'ui-lobby-expedition-footer'}"
+                           FontColorOverride="#1A0808"
                            StyleClasses="ExpeditionLobbySectionHeader"
-                           Margin="0 28 0 0" />
+                           Margin="0 16 0 0" />
 
                     <BoxContainer Visible="False">
                         <Button Name="AHelpButton" Access="Public" />
@@ -276,32 +300,31 @@
         </PanelContainer>
     </BoxContainer>
 
-    <!-- Status pips — top-right of the full screen (Figma) -->
     <BoxContainer Name="StatusPips" Orientation="Horizontal"
                   Margin="0 32 32 0" SeparationOverride="14">
         <BoxContainer Orientation="Horizontal" SeparationOverride="6">
-            <PanelContainer MinSize="6 6" MaxSize="6 6" VerticalAlignment="Center">
+            <PanelContainer Name="PipNetDot" Access="Public" MinSize="6 6" MaxSize="6 6" VerticalAlignment="Center">
                 <PanelContainer.PanelOverride>
-                    <gfx:StyleBoxFlat BackgroundColor="#F0A830" />
+                    <gfx:StyleBoxFlat BackgroundColor="#E03030" />
                 </PanelContainer.PanelOverride>
             </PanelContainer>
-            <Label Text="NET" StyleClasses="ExpeditionLobbyGold" FontColorOverride="#F0A830" />
+            <Label Name="PipNetLabel" Access="Public" Text="NET" StyleClasses="ExpeditionLobbyGold" FontColorOverride="#E03030" />
         </BoxContainer>
         <BoxContainer Orientation="Horizontal" SeparationOverride="6">
-            <PanelContainer MinSize="6 6" MaxSize="6 6" VerticalAlignment="Center">
+            <PanelContainer Name="PipSrvDot" Access="Public" MinSize="6 6" MaxSize="6 6" VerticalAlignment="Center">
                 <PanelContainer.PanelOverride>
-                    <gfx:StyleBoxFlat BackgroundColor="#C07020" />
+                    <gfx:StyleBoxFlat BackgroundColor="#8B1010" />
                 </PanelContainer.PanelOverride>
             </PanelContainer>
-            <Label Text="SRV" StyleClasses="ExpeditionLobbyGold" FontColorOverride="#C07020" />
+            <Label Name="PipSrvLabel" Access="Public" Text="SRV" StyleClasses="ExpeditionLobbyGold" FontColorOverride="#8B1010" />
         </BoxContainer>
         <BoxContainer Orientation="Horizontal" SeparationOverride="6">
-            <PanelContainer MinSize="6 6" MaxSize="6 6" VerticalAlignment="Center">
+            <PanelContainer Name="PipVceDot" Access="Public" MinSize="6 6" MaxSize="6 6" VerticalAlignment="Center">
                 <PanelContainer.PanelOverride>
-                    <gfx:StyleBoxFlat BackgroundColor="#1A1008" />
+                    <gfx:StyleBoxFlat BackgroundColor="#1A0808" />
                 </PanelContainer.PanelOverride>
             </PanelContainer>
-            <Label Text="VCE" FontColorOverride="#2A1A08" StyleClasses="ExpeditionLobbyMuted" />
+            <Label Name="PipVceLabel" Access="Public" Text="VCE" FontColorOverride="#3A1010" StyleClasses="ExpeditionLobbyMuted" />
         </BoxContainer>
     </BoxContainer>
 </lobbyUi:LobbyGui>

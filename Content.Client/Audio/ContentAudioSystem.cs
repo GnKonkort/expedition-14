@@ -1,3 +1,4 @@
+using Content.Client.Lobby;
 using Content.Shared.Audio;
 using Content.Shared.GameTicking;
 using AudioComponent = Robust.Shared.Audio.Components.AudioComponent;
@@ -45,10 +46,9 @@ public sealed partial class ContentAudioSystem : SharedContentAudioSystem
     {
         _fadingOut.Clear();
 
-        // Preserve lobby music but everything else should get dumped.
-        var lobbyMusic = _lobbySoundtrackInfo?.MusicStreamEntityUid;
-        TryComp(lobbyMusic, out AudioComponent? lobbyMusicComp);
-        var oldMusicGain = lobbyMusicComp?.Gain;
+        // Round restart flushes audio entities. Clear lobby soundtrack state and
+        // restart, otherwise StartLobbyMusic thinks a dead stream is still playing.
+        EndLobbyMusic();
 
         var restartAudio = _lobbyRoundRestartAudioStream;
         TryComp(restartAudio, out AudioComponent? restartComp);
@@ -56,16 +56,15 @@ public sealed partial class ContentAudioSystem : SharedContentAudioSystem
 
         SilenceAudio();
 
-        if (oldMusicGain != null)
-        {
-            Audio.SetGain(lobbyMusic, oldMusicGain.Value, lobbyMusicComp);
-        }
-
         if (oldAudioGain != null)
         {
             Audio.SetGain(restartAudio, oldAudioGain.Value, restartComp);
         }
+
         PlayRestartSound(ev);
+
+        if (_state.CurrentState is LobbyState)
+            StartLobbyMusic();
     }
 
     public override void Shutdown()

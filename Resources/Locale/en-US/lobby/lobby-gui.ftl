@@ -27,3 +27,8 @@ ui-lobby-expedition-ready-count-markup = Готовы [color=#F0A830]{$ready}[/c
 ui-lobby-expedition-chat-msg-count = {$count} МСГ
 ui-lobby-expedition-ready-badge = ГОТОВ
 ui-lobby-expedition-join-title = Войти в игру
+ui-lobby-expedition-bg-header = ВИД
+ui-lobby-expedition-bg-server = СЕРВЕРНАЯ
+ui-lobby-expedition-bg-blackhole = ЧЁР. ДЫРА
+ui-lobby-expedition-ready-count-markup-server = [color=#8B3838]Готовы[/color] [color=#E03030]{$ready}[/color] [color=#5A2020]({$total})[/color]
+ui-lobby-expedition-ready-count-markup-blackhole = [color=#7A5010]Готовы[/color] [color=#C89020]{$ready}[/color] [color=#5A3C10]({$total})[/color]

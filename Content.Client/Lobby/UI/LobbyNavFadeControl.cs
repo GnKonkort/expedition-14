@@ -10,7 +10,13 @@ namespace Content.Client.Lobby.UI;
 /// </summary>
 public sealed class LobbyNavFadeControl : Control
 {
-    private const int Steps = 40;
+    private const int Steps = 48;
+
+    /// <summary>Hairline / edge accent (mode palette).</summary>
+    public Color EdgeColor { get; set; } = Color.FromHex("#E03030");
+
+    /// <summary>Rail fill color.</summary>
+    public Color BaseColor { get; set; } = Color.FromHex("#030101");
 
     public LobbyNavFadeControl()
     {
@@ -24,20 +30,21 @@ public sealed class LobbyNavFadeControl : Control
         if (w <= 0 || h <= 0)
             return;
 
-        var baseColor = Color.FromHex("#02030A");
-
+        // Steep ramp: left edge transparent, solid opaque from ~40% — UI stays crisp.
         for (var i = 0; i < Steps; i++)
         {
-            var t = i / (float) (Steps - 1); // 0 = left, 1 = right
-            // CSS: linear-gradient(to left, rgba(...,0.94) 55%, transparent 100%)
-            // → solid from ~45% onward, fade in across the left 45%.
-            var alpha = t < 0.45f ? t / 0.45f * 0.94f : 0.94f;
+            var t = i / (float) (Steps - 1);
+            float alpha;
+            if (t < 0.38f)
+                alpha = MathF.Pow(t / 0.38f, 1.6f) * 0.92f;
+            else
+                alpha = 0.92f + (t - 0.38f) / 0.62f * 0.08f; // → 1.0
+
             var x0 = w * i / Steps;
             var x1 = w * (i + 1) / Steps;
-            handle.DrawRect(new UIBox2(x0, 0, x1, h), baseColor.WithAlpha(alpha));
+            handle.DrawRect(new UIBox2(x0, 0, x1, h), BaseColor.WithAlpha(alpha));
         }
 
-        // Hairline gold edge
-        handle.DrawRect(new UIBox2(0, 0, MathF.Max(1f, UIScale), h), Color.FromHex("#F0A830").WithAlpha(0.1f));
+        handle.DrawRect(new UIBox2(0, 0, MathF.Max(1f, UIScale), h), EdgeColor.WithAlpha(0.18f));
     }
 }

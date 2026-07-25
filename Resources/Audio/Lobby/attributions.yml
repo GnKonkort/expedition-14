@@ -75,3 +75,13 @@
   license: "CC-BY-NC-SA-3.0"
   copyright: "every light is blinking at once by Sunbeamstress/Lauren Loveless."
   source: "https://soundcloud.com/sunbeamstress/every-light-is-blinking-at-once"
+
+- files: ["event_horizon.ogg"]
+  license: "Custom"
+  copyright: "Event Horizon by enderstep41. Converted from MP3 to OGG for Expedition-14 lobby."
+  source: "local"
+
+- files: ["deadnet_theory.ogg"]
+  license: "Custom"
+  copyright: "DeadNet theory (Dead Signal Drift) by enderstep41. Converted from MP3 to OGG for Expedition-14 lobby."
+  source: "local"

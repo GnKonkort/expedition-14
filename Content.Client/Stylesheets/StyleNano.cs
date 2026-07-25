@@ -212,7 +212,10 @@ namespace Content.Client.Stylesheets
             var notoSansBold16 = resCache.NotoStack(variation: "Bold", size: 16);
             var notoSansBold18 = resCache.NotoStack(variation: "Bold", size: 18);
             var notoSansBold20 = resCache.NotoStack(variation: "Bold", size: 20);
+            var notoSansDisplayBold28 = resCache.NotoStack(variation: "Bold", display: true, size: 28);
             var notoSansMono = resCache.GetFont("/EngineFonts/NotoSans/NotoSansMono-Regular.ttf", size: 12);
+            var notoSansMono9 = resCache.GetFont("/EngineFonts/NotoSans/NotoSansMono-Regular.ttf", size: 9);
+            var notoSansMono10 = resCache.GetFont("/EngineFonts/NotoSans/NotoSansMono-Regular.ttf", size: 10);
             var robotoMonoBold11 = resCache.GetFont("/Fonts/RobotoMono/RobotoMono-Bold.ttf", size: 11);
             var robotoMonoBold12 = resCache.GetFont("/Fonts/RobotoMono/RobotoMono-Bold.ttf", size: 12);
             var robotoMonoBold14 = resCache.GetFont("/Fonts/RobotoMono/RobotoMono-Bold.ttf", size: 14);
@@ -1867,8 +1870,8 @@ namespace Content.Client.Stylesheets
                 Element<PanelContainer>().Class(StyleClassExpeditionLobbyNavPanel)
                     .Prop(PanelContainer.StylePropertyPanel, new StyleBoxFlat
                     {
-                        BackgroundColor = Color.FromHex("#02030AF2"),
-                        BorderColor = Color.FromHex("#F0A83022"),
+                        BackgroundColor = Color.FromHex("#050202F2"),
+                        BorderColor = Color.FromHex("#E0303022"),
                         BorderThickness = new Thickness(1, 0, 0, 0),
                         Padding = new Thickness(0),
                     }),
@@ -1876,8 +1879,8 @@ namespace Content.Client.Stylesheets
                 Element<PanelContainer>().Class(StyleClassExpeditionLobbyChatPanel)
                     .Prop(PanelContainer.StylePropertyPanel, new StyleBoxFlat
                     {
-                        BackgroundColor = Color.FromHex("#02030AD9"),
-                        BorderColor = Color.FromHex("#F0A83040"),
+                        BackgroundColor = Color.FromHex("#050202D9"),
+                        BorderColor = Color.FromHex("#E0303040"),
                         BorderThickness = new Thickness(1),
                         Padding = new Thickness(0),
                     }),
@@ -1893,51 +1896,51 @@ namespace Content.Client.Stylesheets
                 Element<PanelContainer>().Class(StyleClassExpeditionPanel)
                     .Prop(PanelContainer.StylePropertyPanel, new StyleBoxFlat
                     {
-                        BackgroundColor = Color.FromHex("#02030AE6"),
-                        BorderColor = Color.FromHex("#F0A83040"),
+                        BackgroundColor = Color.FromHex("#050202E6"),
+                        BorderColor = Color.FromHex("#E0303040"),
                         BorderThickness = new Thickness(1),
                         Padding = new Thickness(6),
                     }),
 
                 Element<Label>().Class(StyleClassExpeditionLobbyBrandMark)
                     .Prop(Label.StylePropertyFont, notoSansBold16)
-                    .Prop(Label.StylePropertyFontColor, ExpeditionGold),
+                    .Prop(Label.StylePropertyFontColor, Color.FromHex("#E03030")),
 
                 Element<Label>().Class(StyleClassExpeditionLobbyBrandTitle)
-                    .Prop(Label.StylePropertyFont, notoSansBold20)
-                    .Prop(Label.StylePropertyFontColor, ExpeditionGold),
+                    .Prop(Label.StylePropertyFont, notoSansDisplayBold28)
+                    .Prop(Label.StylePropertyFontColor, Color.FromHex("#E03030")),
 
                 Element<Label>().Class(StyleClassExpeditionLobbyBrandSubtitle)
-                    .Prop(Label.StylePropertyFont, notoSans8)
-                    .Prop(Label.StylePropertyFontColor, Color.FromHex("#5A4820")),
+                    .Prop(Label.StylePropertyFont, notoSansMono9)
+                    .Prop(Label.StylePropertyFontColor, Color.FromHex("#8B3030")),
 
                 Element<Label>().Class(StyleClassExpeditionLobbyMuted)
-                    .Prop(Label.StylePropertyFont, notoSans10)
-                    .Prop(Label.StylePropertyFontColor, ExpeditionGoldDim),
+                    .Prop(Label.StylePropertyFont, notoSansMono9)
+                    .Prop(Label.StylePropertyFontColor, Color.FromHex("#3A1010")),
 
                 Element<Label>().Class(StyleClassExpeditionLobbyGold)
-                    .Prop(Label.StylePropertyFont, notoSans10)
-                    .Prop(Label.StylePropertyFontColor, ExpeditionGold),
+                    .Prop(Label.StylePropertyFont, notoSansMono10)
+                    .Prop(Label.StylePropertyFontColor, Color.FromHex("#E03030")),
 
                 Element<Label>().Class(StyleClassExpeditionLobbySectionHeader)
-                    .Prop(Label.StylePropertyFont, notoSans8)
-                    .Prop(Label.StylePropertyFontColor, Color.FromHex("#2A1A08")),
+                    .Prop(Label.StylePropertyFont, notoSansMono9)
+                    .Prop(Label.StylePropertyFontColor, Color.FromHex("#3A1010")),
 
                 Element<Label>().Class(StyleClassExpeditionLobbyNavSub)
-                    .Prop(Label.StylePropertyFont, notoSans8)
-                    .Prop(Label.StylePropertyFontColor, Color.FromHex("#1A1008")),
+                    .Prop(Label.StylePropertyFont, notoSansMono9)
+                    .Prop(Label.StylePropertyFontColor, Color.FromHex("#1A0808")),
 
                 Element<Label>().Class(StyleClassExpeditionLobbyReadyBadgeText)
-                    .Prop(Label.StylePropertyFont, notoSansBold12)
+                    .Prop(Label.StylePropertyFont, robotoMonoBold12)
                     .Prop(Label.StylePropertyFontColor, ExpeditionReady),
 
                 Element<Label>().Class(StyleClassExpeditionHeading)
-                    .Prop(Label.StylePropertyFont, notoSansBold16)
-                    .Prop(Label.StylePropertyFontColor, ExpeditionGold),
+                    .Prop(Label.StylePropertyFont, notoSansBold18)
+                    .Prop(Label.StylePropertyFontColor, Color.FromHex("#E03030")),
 
                 Element<Label>().Class(StyleClassExpeditionLobbyNavTitle)
-                    .Prop(Label.StylePropertyFont, notoSansBold16)
-                    .Prop(Label.StylePropertyFontColor, ExpeditionGoldDim),
+                    .Prop(Label.StylePropertyFont, notoSansBold18)
+                    .Prop(Label.StylePropertyFontColor, Color.FromHex("#5A2020")),
 
                 Element<Button>().Class(StyleClassExpeditionLobbyNavButton)
                     .Prop(ContainerButton.StylePropertyStyleBox, new StyleBoxFlat
@@ -1953,10 +1956,10 @@ namespace Content.Client.Stylesheets
                     .Prop(Control.StylePropertyModulateSelf, Color.White),
                 Element<Button>().Class(StyleClassExpeditionLobbyNavButton)
                     .Pseudo(ContainerButton.StylePseudoClassHover)
-                    .Prop(Control.StylePropertyModulateSelf, Color.FromHex("#FFE8B0")),
+                    .Prop(Control.StylePropertyModulateSelf, Color.FromHex("#FFCCCC")),
                 Element<Button>().Class(StyleClassExpeditionLobbyNavButton)
                     .Pseudo(ContainerButton.StylePseudoClassPressed)
-                    .Prop(Control.StylePropertyModulateSelf, Color.FromHex("#FFE0A0")),
+                    .Prop(Control.StylePropertyModulateSelf, Color.FromHex("#FFAAAA")),
                 Element<Button>().Class(StyleClassExpeditionLobbyNavButton)
                     .Pseudo(ContainerButton.StylePseudoClassDisabled)
                     .Prop(Control.StylePropertyModulateSelf, Color.FromHex("#666666")),
@@ -1964,8 +1967,8 @@ namespace Content.Client.Stylesheets
                 Element<Button>().Class(StyleClassExpeditionLobbySmallButton)
                     .Prop(ContainerButton.StylePropertyStyleBox, new StyleBoxFlat
                     {
-                        BackgroundColor = Color.FromHex("#1A1008CC"),
-                        BorderColor = Color.FromHex("#F0A83040"),
+                        BackgroundColor = Color.FromHex("#1A0808CC"),
+                        BorderColor = Color.FromHex("#E0303040"),
                         BorderThickness = new Thickness(1),
                         ContentMarginLeftOverride = 8,
                         ContentMarginRightOverride = 8,
@@ -1974,16 +1977,16 @@ namespace Content.Client.Stylesheets
                     }),
                 Element<Button>().Class(StyleClassExpeditionLobbySmallButton)
                     .Pseudo(ContainerButton.StylePseudoClassHover)
-                    .Prop(Control.StylePropertyModulateSelf, Color.FromHex("#FFE0A0")),
+                    .Prop(Control.StylePropertyModulateSelf, Color.FromHex("#FFAAAA")),
 
                 Element<ProgressBar>().Class(StyleClassExpeditionLobbyReadyBar)
                     .Prop(ProgressBar.StylePropertyBackground, new StyleBoxFlat
                     {
-                        BackgroundColor = Color.FromHex("#1A1008"),
+                        BackgroundColor = Color.FromHex("#1A0808"),
                     })
                     .Prop(ProgressBar.StylePropertyForeground, new StyleBoxFlat
                     {
-                        BackgroundColor = ExpeditionGold,
+                        BackgroundColor = Color.FromHex("#E03030"),
                     }),
             }).ToList());
         }

@@ -29,30 +29,23 @@ public sealed class LobbyFxOverlay : Control
             handle.DrawRect(new UIBox2(0, y + period - line, w, y + period), Color.Black.WithAlpha(0.07f));
         }
 
-        // Vignette: darken edges, keep center (black hole at ~32% x) clearer.
-        // Approximate radial falloff with concentric rect rings (cheap, no shader).
-        const int rings = 18;
+        // Soft vignette — clear center, darker edges so UI chrome stays readable.
+        const int rings = 22;
         for (var i = 0; i < rings; i++)
         {
             var t = (i + 1) / (float) rings;
-            // Transparent until ~30%, then ramp to 0.75 at edges.
-            var alpha = t < 0.35f ? 0f : (t - 0.35f) / 0.65f * 0.55f;
+            var alpha = t < 0.22f ? 0f : (t - 0.22f) / 0.78f * 0.68f;
             if (alpha <= 0.01f)
                 continue;
 
-            var insetX = w * 0.32f * (1f - t);
-            var insetY = h * 0.5f * (1f - t);
-            // Draw as frame (outer ring only) — four rectangles.
-            var color = Color.Black.WithAlpha(alpha / rings * 3f);
+            var insetX = w * 0.38f * (1f - t);
+            var insetY = h * 0.48f * (1f - t);
+            var color = Color.Black.WithAlpha(alpha / rings * 3.2f);
             var outer = new UIBox2(0, 0, w, h);
-            var inner = new UIBox2(insetX, insetY, w - insetX * 0.5f, h - insetY);
-            // Top
+            var inner = new UIBox2(insetX, insetY, w - insetX * 0.55f, h - insetY);
             handle.DrawRect(new UIBox2(outer.Left, outer.Top, outer.Right, inner.Top), color);
-            // Bottom
             handle.DrawRect(new UIBox2(outer.Left, inner.Bottom, outer.Right, outer.Bottom), color);
-            // Left
             handle.DrawRect(new UIBox2(outer.Left, inner.Top, inner.Left, inner.Bottom), color);
-            // Right
             handle.DrawRect(new UIBox2(inner.Right, inner.Top, outer.Right, inner.Bottom), color);
         }
     }

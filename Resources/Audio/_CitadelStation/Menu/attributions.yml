@@ -1,0 +1,7 @@
+- files:
+  - buttonclick.ogg
+  - buttonclickrelease.ogg
+  - buttonrollover.ogg
+  license: "Custom"
+  copyright: "Menu button UI sounds for CitadelStation / Expedition-14. Converted from WAV to OGG."
+  source: "local"

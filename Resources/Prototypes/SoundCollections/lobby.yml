@@ -1,4 +1,5 @@
 # Lobby music disabled — empty playlist (no tracks play).
+# Expedition uses NFLobbyMusic instead.
 - type: soundCollection
   id: LobbyMusic
   files: []
