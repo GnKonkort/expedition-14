@@ -1,0 +1,8 @@
+- type: entity
+  parent: BaseMindRole
+  id: ExpeditorRole
+  name: expeditor-role-name
+  components:
+  - type: MindRole
+    subtype: expeditor-role-name
+  - type: ExpeditorRole

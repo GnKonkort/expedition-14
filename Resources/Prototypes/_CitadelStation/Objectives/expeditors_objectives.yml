@@ -1,0 +1,16 @@
+- type: entity
+  parent: BaseObjective
+  id: ExpeditorAIIntegrityObjective
+  name: ai-integrity-name
+  description: ai-integrity-description
+  components:
+  - type: Objective
+    difficulty: 1.5
+    issuer: TheExpedition
+    icon:
+      sprite: Objects/Misc/folders.rsi
+      state: folder-colormap
+  - type: RoleRequirement
+    roles:
+    - ExpeditorRole
+  - type: AIIntegrityCondition

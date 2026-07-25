@@ -1,0 +1,7 @@
+- type: entity
+  id: EXPGreenshiftRule
+  parent: BaseGameRule
+  components:
+  - type: GameRule
+    minPlayers: 0
+  - type: EXPGreenShift
