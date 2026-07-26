@@ -1,6 +1,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 using Content.Server.NPC.Components;
+using Content.Server.NPC.Systems;
 using Content.Shared.CombatMode;
 using Content.Shared.Mobs;
 using Content.Shared.Mobs.Components;
@@ -63,7 +64,14 @@ public sealed partial class GunOperator : HTNOperator, IHtnConditionalShutdown
     {
         base.Startup(blackboard);
 
-        var ranged = _entManager.EnsureComponent<NPCRangedCombatComponent>(blackboard.GetValue<EntityUid>(NPCBlackboard.Owner));
+        var ammo = _entManager.System<NPCGunAmmoSystem>();
+        ammo.NoteCombatActivity(blackboard);
+
+        var owner = blackboard.GetValue<EntityUid>(NPCBlackboard.Owner);
+        if (ammo.TryGetOwnedGun(owner, out var gun, out _, blackboard))
+            ammo.TryEnsureWielded(owner, gun);
+
+        var ranged = _entManager.EnsureComponent<NPCRangedCombatComponent>(owner);
         ranged.Target = blackboard.GetValue<EntityUid>(TargetKey);
         ranged.UseOpaqueForLOSChecks = UseOpaqueForLOSChecks;
 
@@ -96,6 +104,7 @@ public sealed partial class GunOperator : HTNOperator, IHtnConditionalShutdown
             blackboard.TryGetValue<EntityUid>(TargetKey, out var target, _entManager))
         {
             combat.Target = target;
+            _entManager.System<NPCGunAmmoSystem>().NoteCombatActivity(blackboard);
 
             // Success
             if (_entManager.TryGetComponent<MobStateComponent>(combat.Target, out var mobState) &&

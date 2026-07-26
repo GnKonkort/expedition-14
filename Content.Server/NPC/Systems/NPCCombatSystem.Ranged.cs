@@ -104,6 +104,9 @@ public sealed partial class NPCCombatSystem
                 continue;
             }
 
+            // Rifles/shotguns with GunRequiresWield need both hands occupied.
+            _gunAmmo.TryEnsureWielded(uid, gunUid);
+
             var ammoEv = new GetAmmoCountEvent();
             RaiseLocalEvent(gunUid, ref ammoEv);
 

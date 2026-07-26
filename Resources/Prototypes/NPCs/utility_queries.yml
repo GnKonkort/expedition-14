@@ -10,6 +10,19 @@
       curve: !type:QuadraticCurve
 
 - type: utilityQuery
+  id: InventoryCompatibleAmmo
+  query:
+    - !type:InventoryCompatibleAmmoQuery
+  considerations:
+    - !type:TargetCompatibleWithHeldGunCon
+      curve: !type:BoolCurve
+    - !type:TargetIsMagazineCon
+      curve: !type:QuadraticCurve
+        slope: 1.0
+        exponent: 1.0
+        yOffset: 0.25
+
+- type: utilityQuery
   id: NearbyAmmo
   query:
     - !type:ComponentQuery
@@ -22,7 +35,48 @@
     - !type:TargetDistanceCon
       curve: !type:PresetCurve
         preset: TargetDistance
-    # TODO: Get ammo count.
+    - !type:TargetAccessibleCon
+      curve: !type:BoolCurve
+
+- type: utilityQuery
+  id: NearbyCompatibleAmmo
+  query:
+    - !type:NearbyCompatibleAmmoQuery
+  considerations:
+    - !type:TargetCompatibleWithHeldGunCon
+      curve: !type:BoolCurve
+    - !type:TargetIsMagazineCon
+      curve: !type:QuadraticCurve
+        slope: 1.0
+        exponent: 1.0
+        yOffset: 0.25
+    - !type:TargetDistanceCon
+      curve: !type:PresetCurve
+        preset: TargetDistance
+    - !type:TargetAccessibleCon
+      curve: !type:BoolCurve
+
+- type: utilityQuery
+  id: NearbyAmmoStorages
+  query:
+    - !type:NearbyAmmoStoragesQuery
+  considerations:
+    - !type:TargetDistanceCon
+      curve: !type:PresetCurve
+        preset: TargetDistance
+    - !type:TargetAccessibleCon
+      curve: !type:BoolCurve
+
+- type: utilityQuery
+  id: NearbyAlternateGunLoadout
+  query:
+    - !type:NearbyAlternateGunLoadoutQuery
+  considerations:
+    - !type:TargetAmmoCon
+      curve: !type:QuadraticCurve
+    - !type:TargetDistanceCon
+      curve: !type:PresetCurve
+        preset: TargetDistance
     - !type:TargetAccessibleCon
       curve: !type:BoolCurve
 

@@ -1,9 +1,11 @@
 using System.Threading;
 using System.Threading.Tasks;
 using Content.Server.NPC.Components;
+using Content.Server.NPC.Systems;
 using Content.Shared.CombatMode;
 using Content.Shared.Mobs;
 using Content.Shared.Mobs.Components;
+using Content.Shared.Weapons.Melee;
 
 namespace Content.Server.NPC.HTN.PrimitiveTasks.Operators.Combat.Melee;
 
@@ -37,7 +39,17 @@ public sealed partial class MeleeOperator : HTNOperator, IHtnConditionalShutdown
     public override void Startup(NPCBlackboard blackboard)
     {
         base.Startup(blackboard);
-        var melee = _entManager.EnsureComponent<NPCMeleeCombatComponent>(blackboard.GetValue<EntityUid>(NPCBlackboard.Owner));
+        var ammo = _entManager.System<NPCGunAmmoSystem>();
+        ammo.NoteCombatActivity(blackboard);
+
+        var owner = blackboard.GetValue<EntityUid>(NPCBlackboard.Owner);
+        if (_entManager.System<SharedMeleeWeaponSystem>().TryGetWeapon(owner, out var weaponUid, out _) &&
+            weaponUid != owner)
+        {
+            ammo.TryEnsureWielded(owner, weaponUid);
+        }
+
+        var melee = _entManager.EnsureComponent<NPCMeleeCombatComponent>(owner);
         melee.MissChance = blackboard.GetValueOrDefault<float>(NPCBlackboard.MeleeMissChance, _entManager);
         melee.Target = blackboard.GetValue<EntityUid>(TargetKey);
     }
@@ -93,6 +105,7 @@ public sealed partial class MeleeOperator : HTNOperator, IHtnConditionalShutdown
             target != EntityUid.Invalid)
         {
             combat.Target = target;
+            _entManager.System<NPCGunAmmoSystem>().NoteCombatActivity(blackboard);
 
             // Success
             if (_entManager.TryGetComponent<MobStateComponent>(target, out var mobState) &&

@@ -34,6 +34,8 @@ public sealed partial class NPCBlackboard : IEnumerable<KeyValuePair<string, obj
         {"RotateSpeed", float.MaxValue},
         {"VisionRadius", 10f},
         {"AggroVisionRadius", 10f},
+        {"AmmoSearchRange", 7f},
+        {"AmmoLootHostileRange", 4f},
     };
 
     /// <summary>

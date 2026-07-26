@@ -88,6 +88,10 @@
     - tasks:
         - !type:HTNCompoundTask
           task: MeleeCombatCompound
+    # Holster gun + stow held ammo after a long stretch without hostiles.
+    - tasks:
+        - !type:HTNCompoundTask
+          task: PeaceStowCompound
     - tasks:
         - !type:HTNCompoundTask
           task: IdleCompound

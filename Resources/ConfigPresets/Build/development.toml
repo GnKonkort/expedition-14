@@ -1,8 +1,8 @@
 ﻿[game]
 # Straight in-game baby
 lobbyenabled = false
-# Frontier: special map
-map = "NFDev"
+# Local NPC testing map (bin/Content.Server/data/npcdev)
+map = "NpcDev"
 role_timers = false
 
 [events]

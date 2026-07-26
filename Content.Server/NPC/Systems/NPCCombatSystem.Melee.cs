@@ -66,6 +66,9 @@ public sealed partial class NPCCombatSystem
             return;
         }
 
+        if (weaponUid != uid)
+            _gunAmmo.TryEnsureWielded(uid, weaponUid);
+
         if (!xformQuery.TryGetComponent(uid, out var xform) ||
             !xformQuery.TryGetComponent(component.Target, out var targetXform))
         {

@@ -58,6 +58,7 @@ public sealed class NPCUtilitySystem : EntitySystem
     [Dependency] private readonly EntityWhitelistSystem _whitelistSystem = default!;
     [Dependency] private readonly MobThresholdSystem _thresholdSystem = default!;
     [Dependency] private readonly TurretTargetSettingsSystem _turretTargetSettings = default!;
+    [Dependency] private readonly NPCGunAmmoSystem _gunAmmo = default!;
 
     private EntityQuery<PuddleComponent> _puddleQuery;
     private EntityQuery<TransformComponent> _xformQuery;
@@ -271,6 +272,43 @@ public sealed class NPCUtilitySystem : EntitySystem
                 }
 
                 return 1f;
+            }
+            case TargetCompatibleWithHeldGunCon:
+            {
+                if (!_gunAmmo.TryGetOwnedGun(owner, out var gunUid, out _, blackboard))
+                    return 0f;
+
+                return _gunAmmo.IsAmmoCompatible(gunUid, targetUid) ? 1f : 0f;
+            }
+            case TargetIsMagazineCon:
+            {
+                if (!_gunAmmo.TryGetOwnedGun(owner, out var gunUid, out _, blackboard))
+                    return 0f;
+
+                return _gunAmmo.IsCompatibleMagazine(gunUid, targetUid) ? 1f : 0f;
+            }
+            case TargetMagazineFillCon:
+            {
+                if (!_gunAmmo.TryGetOwnedGun(owner, out var gunUid, out _, blackboard))
+                    return 0f;
+
+                if (!_gunAmmo.IsCompatibleMagazine(gunUid, targetUid))
+                    return 0f;
+
+                var ev = new GetAmmoCountEvent();
+                RaiseLocalEvent(targetUid, ref ev);
+                if (ev.Capacity <= 0)
+                    return 0f;
+
+                return Math.Clamp(1f - ev.Count / (float) ev.Capacity, 0f, 1f);
+            }
+            case HeldGunHasNearbyMatchingAmmoCon:
+            {
+                if (!_gunAmmo.TryGetOwnedGun(owner, out var gunUid, out _, blackboard))
+                    return 0f;
+
+                var range = _gunAmmo.GetAmmoSearchRange(blackboard);
+                return _gunAmmo.HasCompatibleAmmoNearby(owner, gunUid, range) ? 1f : 0f;
             }
             case TargetDistanceCon:
             {
@@ -487,6 +525,43 @@ public sealed class NPCUtilitySystem : EntitySystem
                 {
                     entities.Add(ent);
                 }
+                break;
+            }
+            case InventoryCompatibleAmmoQuery:
+            {
+                if (!_gunAmmo.TryGetOwnedGun(owner, out var gunUid, out _, blackboard))
+                    break;
+
+                foreach (var item in _gunAmmo.EnumerateInventoryAmmoCandidates(owner))
+                {
+                    if (_gunAmmo.IsAmmoCompatible(gunUid, item))
+                        entities.Add(item);
+                }
+
+                break;
+            }
+            case NearbyCompatibleAmmoQuery:
+            {
+                if (!_gunAmmo.TryGetOwnedGun(owner, out var gunUid, out _, blackboard))
+                    break;
+
+                _gunAmmo.CollectNearbyCompatibleAmmo(owner, gunUid, _gunAmmo.GetAmmoSearchRange(blackboard), entities);
+                break;
+            }
+            case NearbyAmmoStoragesQuery:
+            {
+                if (!_gunAmmo.TryGetOwnedGun(owner, out var gunUid, out _, blackboard))
+                    break;
+
+                _gunAmmo.CollectNearbyAmmoStorages(owner, gunUid, _gunAmmo.GetAmmoSearchRange(blackboard), entities);
+                break;
+            }
+            case NearbyAlternateGunLoadoutQuery:
+            {
+                if (!_gunAmmo.TryGetOwnedGun(owner, out var gunUid, out _, blackboard))
+                    break;
+
+                _gunAmmo.CollectNearbyAlternateLoadouts(owner, gunUid, _gunAmmo.GetAmmoSearchRange(blackboard), entities);
                 break;
             }
             default:
