@@ -3,10 +3,9 @@ using Content.Server.NPC.Systems;
 namespace Content.Server.NPC.HTN.Preconditions;
 
 /// <summary>
-/// True when inventory has an empty MayTransfer ammo box or a drained disposable power cell
-/// matching the owned gun.
+/// True when an empty external-charge energy gun has no portable recharger and should be discarded.
 /// </summary>
-public sealed partial class HasEmptyCompatibleAmmoBoxPrecondition : HTNPrecondition
+public sealed partial class ShouldDiscardEnergyGunPrecondition : HTNPrecondition
 {
     [Dependency] private readonly IEntityManager _entManager = default!;
 
@@ -18,8 +17,8 @@ public sealed partial class HasEmptyCompatibleAmmoBoxPrecondition : HTNPrecondit
         var ammo = _entManager.System<NPCGunAmmoSystem>();
         var owner = blackboard.GetValue<EntityUid>(NPCBlackboard.Owner);
         var has = ammo.TryGetOwnedGun(owner, out var gun, out _, blackboard) &&
-                  (ammo.TryFindEmptyCompatibleAmmoBox(owner, gun, out _) ||
-                   ammo.TryFindDrainedDisposablePowerCell(owner, gun, out _));
+                  ammo.ShouldDiscardEnergyGun(owner, gun);
+        ammo.DebugAmmo(owner, $"ShouldDiscardEnergyGunPrecondition => {has} (invert={Invert})", force: true);
         return Invert ? !has : has;
     }
 }

@@ -123,7 +123,7 @@
         - !type:HTNPrimitiveTask
           operator: !type:FillMagazineOperator
 
-# Stock up to combat minimum: discard empty boxes, fill mags, top off tubes, loot floor ammo.
+# Stock up to combat minimum: discard empty boxes / drained disposable cells, fill mags, top off tubes, loot floor ammo.
 - type: htnCompound
   id: StockAmmoCompound
   branches:
@@ -208,11 +208,39 @@
         - !type:HTNPrimitiveTask
           operator: !type:ReloadHeldGunOperator
 
+    # 1b. Insert / upgrade power cell for energy guns
+    - preconditions:
+        - !type:OwnedGunPrecondition
+        - !type:AmmoSearchReadyPrecondition
+        - !type:NeedsPowerCellInsertPrecondition
+      tasks:
+        - !type:HTNPrimitiveTask
+          operator: !type:ReloadHeldGunOperator
+
+    # 1c. Empty external-charge energy gun with no portable recharger → discard
+    - preconditions:
+        - !type:OwnedGunPrecondition
+        - !type:ShouldDiscardEnergyGunPrecondition
+      tasks:
+        - !type:HTNPrimitiveTask
+          operator: !type:DiscardUnusableEnergyGunOperator
+
+    # 1d. Empty energy gun: holster/dock for recharge, then fall through to melee / other tasks
+    #     (do NOT idle-wait — NeedsEnergyChargeWait only blocks ranged use until full)
+    - preconditions:
+        - !type:OwnedGunPrecondition
+        - !type:NeedsStowEnergyGunForChargePrecondition
+      tasks:
+        - !type:HTNPrimitiveTask
+          operator: !type:StowEnergyGunForChargeOperator
+
     # 2. Fight when stocked (draw happens inside GunCombatCompound)
     - preconditions:
         - !type:OwnedGunPrecondition
         - !type:GunAmmoPrecondition
           minPercent: 0.001
+        - !type:NeedsEnergyChargeWaitPrecondition
+          invert: true
         - !type:NeedsAmmoStockPrecondition
           invert: true
         - !type:NearbyHostilesPrecondition
@@ -225,6 +253,8 @@
         - !type:OwnedGunPrecondition
         - !type:GunAmmoPrecondition
           minPercent: 0.001
+        - !type:NeedsEnergyChargeWaitPrecondition
+          invert: true
         - !type:NearbyHostilesPrecondition
           rangeKey: MeleeRange
       tasks:
@@ -312,11 +342,14 @@
           invert: true
         - !type:AmmoLogisticsPotentialPrecondition
           invert: true
+        - !type:ShouldDiscardEnergyGunPrecondition
+          invert: true
       tasks:
         - !type:HTNPrimitiveTask
           operator: !type:StowPeaceEquipmentOperator
 
-# After PeaceStowDelaySeconds without hostiles: holster gun + stow held ammo into bag/pockets.
+# After PeaceStowDelaySeconds without hostiles: holster gun, stow held ammo,
+# and for power-cell guns restore self-recharging cells / discard disposable spares.
 - type: htnCompound
   id: PeaceStowCompound
   branches:

@@ -5,7 +5,7 @@ using Content.Server.NPC.Systems;
 namespace Content.Server.NPC.HTN.PrimitiveTasks.Operators.Combat.Ranged;
 
 /// <summary>
-/// Drops one empty ammo box that matches the owned gun's caliber.
+/// Drops one empty ammo box or drained disposable power cell for the owned gun.
 /// </summary>
 public sealed partial class DiscardEmptyAmmoBoxOperator : HTNOperator
 {
@@ -21,7 +21,9 @@ public sealed partial class DiscardEmptyAmmoBoxOperator : HTNOperator
         if (!ammo.TryGetOwnedGun(owner, out var gun, out _, blackboard))
             return (false, null);
 
-        return (ammo.TryFindEmptyCompatibleAmmoBox(owner, gun, out _), null);
+        var has = ammo.TryFindEmptyCompatibleAmmoBox(owner, gun, out _) ||
+                  ammo.TryFindDrainedDisposablePowerCell(owner, gun, out _);
+        return (has, null);
     }
 
     public override HTNOperatorStatus Update(NPCBlackboard blackboard, float frameTime)
@@ -32,7 +34,10 @@ public sealed partial class DiscardEmptyAmmoBoxOperator : HTNOperator
         if (!ammo.TryGetOwnedGun(owner, out var gun, out _, blackboard))
             return HTNOperatorStatus.Failed;
 
-        return ammo.TryDiscardEmptyAmmoBox(owner, gun)
+        if (ammo.TryDiscardEmptyAmmoBox(owner, gun))
+            return HTNOperatorStatus.Finished;
+
+        return ammo.TryDiscardDrainedDisposablePowerCell(owner, gun)
             ? HTNOperatorStatus.Finished
             : HTNOperatorStatus.Failed;
     }

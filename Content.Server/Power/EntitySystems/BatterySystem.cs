@@ -2,7 +2,9 @@ using Content.Server.Emp;
 using Content.Shared.Emp; // Frontier: Upstream - #28984
 using Content.Server.Power.Components;
 using Content.Shared.Cargo;
+using Content.Shared.Containers.ItemSlots;
 using Content.Shared.Examine;
+using Content.Shared.PowerCell.Components;
 using Content.Shared.Rejuvenate;
 using JetBrains.Annotations;
 using Robust.Shared.Utility;
@@ -15,6 +17,7 @@ namespace Content.Server.Power.EntitySystems
     public sealed class BatterySystem : EntitySystem
     {
         [Dependency] private readonly IGameTiming _timing = default!;
+        [Dependency] private readonly ItemSlotsSystem _itemSlots = default!;
 
         public override void Initialize()
         {
@@ -137,6 +140,10 @@ namespace Content.Server.Power.EntitySystems
 
         private void OnChangeCharge(Entity<BatteryComponent> entity, ref ChangeChargeEvent args)
         {
+            // Slotted power cell is the real charge source for cell-fed guns that also inherited Battery.
+            if (HasOccupiedPowerCellSlot(entity))
+                return;
+
             if (args.ResidualValue == 0)
                 return;
 
@@ -145,8 +152,22 @@ namespace Content.Server.Power.EntitySystems
 
         private void OnGetCharge(Entity<BatteryComponent> entity, ref GetChargeEvent args)
         {
+            if (HasOccupiedPowerCellSlot(entity))
+                return;
+
             args.CurrentCharge += entity.Comp.CurrentCharge;
             args.MaxCharge += entity.Comp.MaxCharge;
+        }
+
+        /// <summary>
+        /// True when this entity has a power-cell slot with a cell inserted — that cell owns charge I/O.
+        /// </summary>
+        private bool HasOccupiedPowerCellSlot(EntityUid uid)
+        {
+            if (!TryComp<PowerCellSlotComponent>(uid, out var slotComp))
+                return false;
+
+            return _itemSlots.TryGetSlot(uid, slotComp.CellSlotId, out var slot) && slot.HasItem;
         }
 
         public float UseCharge(EntityUid uid, float value, BatteryComponent? battery = null)

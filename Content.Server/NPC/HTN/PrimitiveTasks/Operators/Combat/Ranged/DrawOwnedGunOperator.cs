@@ -36,6 +36,9 @@ public sealed partial class DrawOwnedGunOperator : HTNOperator
         if (!ammo.TryGetOwnedGun(owner, out var gun, out _, blackboard))
             return HTNOperatorStatus.Failed;
 
+        // Writable blackboard: clear stuck charge-wait so we fight until empty, not re-holster mid-mag.
+        ammo.TryClearEnergyChargeWaitIfReady(gun, blackboard);
+
         return ammo.TryDrawOwnedGun(owner, gun)
             ? HTNOperatorStatus.Finished
             : HTNOperatorStatus.Failed;

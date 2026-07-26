@@ -7,6 +7,7 @@ using Content.Shared.Inventory.VirtualItem;
 using Content.Shared.NPC.Systems;
 using Content.Shared.Storage;
 using Content.Shared.Storage.EntitySystems;
+using Content.Shared.PowerCell;
 using Content.Shared.Weapons.Ranged;
 using Content.Shared.Weapons.Ranged.Components;
 using Content.Shared.Weapons.Ranged.Events;
@@ -24,7 +25,7 @@ namespace Content.Server.NPC.Systems;
 /// Helpers for humanoid NPC ammo logistics: magazine/ballistic compatibility,
 /// inventory search (slots + one Storage level), and loaded-mag counting.
 /// </summary>
-public sealed class NPCGunAmmoSystem : EntitySystem
+public sealed partial class NPCGunAmmoSystem : EntitySystem
 {
     public const string MagazineSlot = "gun_magazine";
     public const string ChamberSlot = "gun_chamber";
@@ -55,6 +56,8 @@ public sealed class NPCGunAmmoSystem : EntitySystem
     public const int MinCompatibleMags = 3;
     /// <summary>Legacy alias — loaded-mag fill target matches total mag stock goal.</summary>
     public const int MinLoadedCompatibleMags = MinCompatibleMags;
+    /// <summary>Target power cells on the body: 1 seated in the gun + 2 spares.</summary>
+    public const int MinCompatiblePowerCells = 3;
     /// <summary>Loose live cartridges to keep for tube/shotgun guns (plus one ammo box).</summary>
     public const int MinTubeLooseCartridges = 6;
     private const int MaxCarryParentHops = 10;
@@ -98,6 +101,7 @@ public sealed class NPCGunAmmoSystem : EntitySystem
         _gunQuery = GetEntityQuery<GunComponent>();
         _xformQuery = GetEntityQuery<TransformComponent>();
         _cartridgeQuery = GetEntityQuery<CartridgeAmmoComponent>();
+        InitializeEnergy();
     }
 
     /// <summary>
@@ -285,6 +289,16 @@ public sealed class NPCGunAmmoSystem : EntitySystem
         {
             if (_gunQuery.HasComponent(item))
                 yield return item;
+
+            // Energy gun docked in a worn portable recharger.
+            if (_chargerQuery.TryGetComponent(item, out var charger) &&
+                charger.Portable &&
+                _slots.TryGetSlot(item, charger.SlotId, out var slot) &&
+                slot.Item is { } docked &&
+                _gunQuery.HasComponent(docked))
+            {
+                yield return docked;
+            }
         }
     }
 
@@ -361,6 +375,10 @@ public sealed class NPCGunAmmoSystem : EntitySystem
 
         if (!_hands.IsHolding(owner, gun))
             return IsCarriedBy(owner, gun);
+
+        // Prefer docking chargeable energy guns into the portable recharger.
+        if (IsEnergyGun(gun) && !IsPowerCellSwapGun(gun) && TryInsertGunIntoPortableRecharger(owner, gun))
+            return true;
 
         // Prefer back / suit storage so shotguns hang on the body instead of filling pockets.
         foreach (var slotName in PreferredGunEquipSlots)
@@ -534,6 +552,9 @@ public sealed class NPCGunAmmoSystem : EntitySystem
         // Ammo boxes / speedloaders: match by caliber whitelist overlap, NOT by treating the
         // box entity as a ShellShotgun/cartridge (boxes rarely carry those tags themselves).
         if (IsCompatibleAmmoBox(gun, item))
+            return true;
+
+        if (IsCompatiblePowerCell(gun, item))
             return true;
 
         if (IsMagazineFed(gun))
@@ -750,6 +771,18 @@ public sealed class NPCGunAmmoSystem : EntitySystem
         if (TryFindEmptyCompatibleAmmoBox(owner, gun, out _))
             return true;
 
+        if (TryFindDrainedDisposablePowerCell(owner, gun, out _))
+            return true;
+
+        if (IsPowerCellSwapGun(gun))
+        {
+            if (NeedsPowerCellInsert(owner, gun))
+                return true;
+
+            // Under MinCompatiblePowerCells, or a floor cell that beats the worst owned spare.
+            return TryFindFirstCompatibleAmmoNearby(owner, gun, range);
+        }
+
         if (IsMagazineFed(gun))
         {
             if (HasMagazineFillMaterial(owner, gun))
@@ -794,6 +827,12 @@ public sealed class NPCGunAmmoSystem : EntitySystem
                 DebugAmmo(owner, "HasUsableReloadMaterial: incomplete mag + nearby fill");
                 return true;
             }
+        }
+
+        if (IsPowerCellSwapGun(gun) && NeedsPowerCellInsert(owner, gun))
+        {
+            DebugAmmo(owner, "HasUsableReloadMaterial: NeedsPowerCellInsert");
+            return true;
         }
 
         if (NeedsBallisticTubeFill(owner, gun))
@@ -1359,6 +1398,9 @@ public sealed class NPCGunAmmoSystem : EntitySystem
                 yield return seatedMag;
             }
 
+            if (TryGetSeatedPowerCell(held, out var heldCell) && seen.Add(heldCell))
+                yield return heldCell;
+
             foreach (var inner in EnumerateStorageContentsRecursive(held, depth: 0))
             {
                 if (seen.Add(inner))
@@ -1387,6 +1429,9 @@ public sealed class NPCGunAmmoSystem : EntitySystem
                 yield return invSeatedMag;
             }
 
+            if (TryGetSeatedPowerCell(child, out var invCell) && seen.Add(invCell))
+                yield return invCell;
+
             foreach (var inner in EnumerateStorageContentsRecursive(child, depth: 0))
             {
                 if (!seen.Add(inner))
@@ -1400,6 +1445,9 @@ public sealed class NPCGunAmmoSystem : EntitySystem
                 {
                     yield return bagSeatedMag;
                 }
+
+                if (TryGetSeatedPowerCell(inner, out var bagCell) && seen.Add(bagCell))
+                    yield return bagCell;
             }
         }
     }
@@ -1637,12 +1685,15 @@ public sealed class NPCGunAmmoSystem : EntitySystem
     }
 
     /// <summary>
-    /// True when the NPC holds a gun/ammo and has not been in active combat for <see cref="PeaceStowDelaySeconds"/>.
-    /// Hostiles in aggro alone do not block holstering — only Gun/Melee combat does.
+    /// True when the NPC holds a gun/ammo (or needs power-cell peace optimize) and has not been in active combat
+    /// for <see cref="PeaceStowDelaySeconds"/>. Hostiles in aggro alone do not block — only Gun/Melee combat does.
     /// </summary>
     public bool IsPeaceStowReady(EntityUid owner, NPCBlackboard blackboard)
     {
-        if (!NeedsPeaceStow(owner))
+        var needsCellOpt = TryGetOwnedGun(owner, out var ownedGun, out _, blackboard) &&
+                           NeedsPowerCellPeaceOptimize(owner, ownedGun);
+
+        if (!NeedsPeaceStow(owner) && !needsCellOpt)
             return false;
 
         if (HasComp<NPCRangedCombatComponent>(owner) || HasComp<NPCMeleeCombatComponent>(owner))
@@ -1686,6 +1737,9 @@ public sealed class NPCGunAmmoSystem : EntitySystem
         if (IsMagazinePrototype(item))
             return true;
 
+        if (_powerCellQuery.HasComponent(item))
+            return true;
+
         if (_ballisticQuery.TryGetComponent(item, out var bal) && bal.MayTransfer)
             return true;
 
@@ -1718,11 +1772,14 @@ public sealed class NPCGunAmmoSystem : EntitySystem
     {
         var didSomething = false;
 
+        if (TryGetOwnedGun(owner, out var ownedGun, out _, blackboard) && IsPowerCellSwapGun(ownedGun))
+            didSomething |= TryPeaceOptimizePowerCells(owner, ownedGun);
+
         TryStowHeldAmmoLogistics(owner);
 
         if (TryGetOwnedGun(owner, out var gun, out _, blackboard) && _hands.IsHolding(owner, gun))
         {
-            var stowed = TryStowGunToStorage(owner, gun) || TryStowGun(owner, gun);
+            var stowed = TryStowGunPreferringRecharger(owner, gun);
             DebugAmmo(owner, $"TryPeaceStowEquipment gun {ToPrettyString(gun)} => {stowed}");
             didSomething |= stowed;
         }
@@ -1733,7 +1790,7 @@ public sealed class NPCGunAmmoSystem : EntitySystem
                 if (!_gunQuery.HasComponent(held))
                     continue;
 
-                var stowed = TryStowGunToStorage(owner, held) || TryStowGun(owner, held);
+                var stowed = TryStowGunPreferringRecharger(owner, held);
                 DebugAmmo(owner, $"TryPeaceStowEquipment held gun {ToPrettyString(held)} => {stowed}");
                 didSomething |= stowed;
                 break;
@@ -1742,7 +1799,10 @@ public sealed class NPCGunAmmoSystem : EntitySystem
 
         TryStowHeldAmmoLogistics(owner);
 
-        if (!NeedsPeaceStow(owner))
+        var stillNeedsCellOpt = TryGetOwnedGun(owner, out var gunAfter, out _, blackboard) &&
+                                NeedsPowerCellPeaceOptimize(owner, gunAfter);
+
+        if (!NeedsPeaceStow(owner) && !stillNeedsCellOpt)
             return true;
 
         return didSomething;
@@ -1926,6 +1986,9 @@ public sealed class NPCGunAmmoSystem : EntitySystem
         public readonly bool MagFed;
         public readonly int MagCount;
         public readonly int LooseCartCount;
+        public readonly int PowerCellCount;
+        /// <summary>Lowest ScorePowerCellQuality among owned compatible cells; -1 if none.</summary>
+        public readonly int WorstPowerCellQuality;
         public readonly bool HasNonEmptyBox;
         public readonly bool TubeBelowCapacity;
         public readonly EntityUid IncompleteMag;
@@ -1936,6 +1999,8 @@ public sealed class NPCGunAmmoSystem : EntitySystem
             bool magFed,
             int magCount,
             int looseCartCount,
+            int powerCellCount,
+            int worstPowerCellQuality,
             bool hasNonEmptyBox,
             bool tubeBelowCapacity,
             EntityUid incompleteMag,
@@ -1945,6 +2010,8 @@ public sealed class NPCGunAmmoSystem : EntitySystem
             MagFed = magFed;
             MagCount = magCount;
             LooseCartCount = looseCartCount;
+            PowerCellCount = powerCellCount;
+            WorstPowerCellQuality = worstPowerCellQuality;
             HasNonEmptyBox = hasNonEmptyBox;
             TubeBelowCapacity = tubeBelowCapacity;
             IncompleteMag = incompleteMag;
@@ -1958,6 +2025,8 @@ public sealed class NPCGunAmmoSystem : EntitySystem
         var magFed = IsMagazineFed(gun);
         var magCount = 0;
         var loose = 0;
+        var powerCells = 0;
+        var worstCellQuality = -1;
         var incomplete = default(EntityUid);
         var hasIncomplete = false;
         var incompleteHasBox = false;
@@ -1970,6 +2039,11 @@ public sealed class NPCGunAmmoSystem : EntitySystem
             if (hasIncomplete)
                 incompleteHasBox = TryFindMayTransferAmmoBox(owner, gun, incomplete, out _);
         }
+        else if (IsPowerCellSwapGun(gun))
+        {
+            powerCells = CountCompatiblePowerCells(owner, gun);
+            worstCellQuality = GetWorstOwnedPowerCellQuality(owner, gun);
+        }
         else
         {
             loose = CountLooseCompatibleCartridges(owner, gun);
@@ -1980,6 +2054,8 @@ public sealed class NPCGunAmmoSystem : EntitySystem
             magFed,
             magCount,
             loose,
+            powerCells,
+            worstCellQuality,
             HasNonEmptyCompatibleAmmoBox(owner, gun),
             tubeBelow,
             incomplete,
@@ -2046,6 +2122,35 @@ public sealed class NPCGunAmmoSystem : EntitySystem
                 return 100;
 
             return -1;
+        }
+
+        if (IsCompatiblePowerCell(gun, item))
+        {
+            var isSelf = IsSelfRechargingBattery(item);
+            var charged = GetBatteryCurrentCharge(item) > 0.01f;
+
+            // Empty disposable cells are dead weight.
+            if (!charged && !isSelf)
+                return -1;
+
+            var quality = ScorePowerCellQuality(item);
+            if (quality <= 0)
+                return -1;
+
+            // Stock to 1 seated + 2 spares, or replace the worst owned cell with a better floor one.
+            if (cache.PowerCellCount < MinCompatiblePowerCells)
+            {
+                if (isSelf)
+                    return charged ? 550 : 420;
+                return 500;
+            }
+
+            // At capacity: upgrade any of the three — quality must beat the worst owned cell.
+            if (quality <= cache.WorstPowerCellQuality)
+                return -1;
+
+            // Prefer the biggest upgrade first (self-recharge / higher MaxCharge).
+            return 450 + Math.Min(quality / 50_000, 40);
         }
 
         return -1;
@@ -2135,6 +2240,13 @@ public sealed class NPCGunAmmoSystem : EntitySystem
             if (!TryAddNearbyAmmoCandidate(owner, gun, ent.Owner, entities, ref checkedCount))
                 break;
         }
+
+        // Swappable energy-gun cells.
+        foreach (var ent in _lookup.GetEntitiesInRange<PowerCellComponent>(mapPos, range))
+        {
+            if (!TryAddNearbyAmmoCandidate(owner, gun, ent.Owner, entities, ref checkedCount))
+                break;
+        }
     }
 
     private bool TryAddNearbyAmmoCandidate(
@@ -2185,6 +2297,14 @@ public sealed class NPCGunAmmoSystem : EntitySystem
         }
 
         foreach (var ent in _lookup.GetEntitiesInRange<CartridgeAmmoComponent>(mapPos, range))
+        {
+            if (IsNearbyCompatibleAmmoCandidate(owner, gun, ent.Owner, in cache, ref checkedCount))
+                return true;
+            if (checkedCount > MaxNearbyLookupChecks)
+                return false;
+        }
+
+        foreach (var ent in _lookup.GetEntitiesInRange<PowerCellComponent>(mapPos, range))
         {
             if (IsNearbyCompatibleAmmoCandidate(owner, gun, ent.Owner, in cache, ref checkedCount))
                 return true;
@@ -2583,7 +2703,47 @@ public sealed class NPCGunAmmoSystem : EntitySystem
     public bool HasAmmoLogisticsPotential(EntityUid owner, EntityUid gun)
     {
         if (HasUsableReloadMaterial(owner, gun))
+        {
+            if (IsEnergyGun(gun))
+                DebugAmmo(owner, $"HasAmmoLogisticsPotential=true (reload material) ({DescribeEnergyGunState(owner, gun)})", force: true);
             return true;
+        }
+
+        // Self-recharging energy guns always retain value while they can refill.
+        if (IsSelfRechargingEnergyGun(gun))
+        {
+            DebugAmmo(owner, $"HasAmmoLogisticsPotential=true (self-recharge) ({DescribeEnergyGunState(owner, gun)})", force: true);
+            return true;
+        }
+
+        // External-charge guns are only keepable with a portable recharger.
+        if (IsExternalChargeEnergyGun(gun))
+        {
+            var keep = TryFindPortableRecharger(owner, out var recharger);
+            DebugAmmo(owner,
+                $"HasAmmoLogisticsPotential={keep} (external) recharger={(keep ? ToPrettyString(recharger) : "null")} ({DescribeEnergyGunState(owner, gun)})",
+                force: true);
+            return keep;
+        }
+
+        if (IsPowerCellSwapGun(gun))
+        {
+            foreach (var item in EnumerateInventoryAmmoCandidates(owner))
+            {
+                if (!IsCompatiblePowerCell(gun, item))
+                    continue;
+
+                // Charged cells or self-recharging empties (will refill in bag/gun) keep the loadout viable.
+                if (GetBatteryCurrentCharge(item) > 0f || IsSelfRechargingBattery(item))
+                {
+                    DebugAmmo(owner, $"HasAmmoLogisticsPotential=true (spare cell {ToPrettyString(item)})");
+                    return true;
+                }
+            }
+
+            DebugAmmo(owner, $"HasAmmoLogisticsPotential=false (power-cell, no spare) ({DescribeEnergyGunState(owner, gun)})");
+            return false;
+        }
 
         if (IsMagazineFed(gun))
         {

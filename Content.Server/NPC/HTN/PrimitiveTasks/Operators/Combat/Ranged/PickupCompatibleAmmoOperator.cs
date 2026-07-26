@@ -104,6 +104,24 @@ public sealed partial class PickupCompatibleAmmoOperator : HTNOperator
                 ammo.TryStowItem(owner, item);
             }
         }
+        else if (ammo.IsCompatiblePowerCell(gun, item))
+        {
+            ammo.DebugAmmo(owner,
+                $"PickupCompatibleAmmo: cell {_entManager.ToPrettyString(item)} {ammo.DescribePowerCell(item, gun)} needsInsert={ammo.NeedsPowerCellInsert(owner, gun)} cells={ammo.DescribeOwnedPowerCells(owner, gun)}",
+                force: true);
+
+            // Always stock into inventory first. Only seat a cell when the gun is empty —
+            // and then pick the best charged spare among all owned cells (not just this pickup).
+            ammo.TryStowItem(owner, item);
+            ammo.TryTrimExcessPowerCells(owner, gun);
+
+            if (ammo.NeedsPowerCellInsert(owner, gun) &&
+                ammo.TryFindBestCompatiblePowerCell(owner, gun, out var best, out _) &&
+                !ammo.TryInsertPowerCell(owner, gun, best))
+            {
+                ammo.DebugAmmo(owner, $"PickupCompatibleAmmo: failed insert best cell {_entManager.ToPrettyString(best)}", force: true);
+            }
+        }
         else if (ammo.IsCompatibleAmmoBox(gun, item))
         {
             if (!ammo.IsMagazineFed(gun) && ammo.IsProviderBelowCapacity(gun))
@@ -139,6 +157,7 @@ public sealed partial class PickupCompatibleAmmoOperator : HTNOperator
         }
 
         ammo.TryDiscardEmptyAmmoBox(owner, gun);
+        ammo.TryDiscardDrainedDisposablePowerCell(owner, gun);
         return HTNOperatorStatus.Finished;
     }
 }

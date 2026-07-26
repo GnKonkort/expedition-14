@@ -3,10 +3,10 @@ using Content.Server.NPC.Systems;
 namespace Content.Server.NPC.HTN.Preconditions;
 
 /// <summary>
-/// True when inventory has an empty MayTransfer ammo box or a drained disposable power cell
-/// matching the owned gun.
+/// True while an energy gun must not be used for ranged combat (empty / mid-recharge until full).
+/// Does not idle the NPC — after stow, melee / other HTN branches can run.
 /// </summary>
-public sealed partial class HasEmptyCompatibleAmmoBoxPrecondition : HTNPrecondition
+public sealed partial class NeedsEnergyChargeWaitPrecondition : HTNPrecondition
 {
     [Dependency] private readonly IEntityManager _entManager = default!;
 
@@ -18,8 +18,8 @@ public sealed partial class HasEmptyCompatibleAmmoBoxPrecondition : HTNPrecondit
         var ammo = _entManager.System<NPCGunAmmoSystem>();
         var owner = blackboard.GetValue<EntityUid>(NPCBlackboard.Owner);
         var has = ammo.TryGetOwnedGun(owner, out var gun, out _, blackboard) &&
-                  (ammo.TryFindEmptyCompatibleAmmoBox(owner, gun, out _) ||
-                   ammo.TryFindDrainedDisposablePowerCell(owner, gun, out _));
+                  ammo.NeedsEnergyChargeWait(owner, gun, blackboard);
+        ammo.DebugAmmo(owner, $"NeedsEnergyChargeWaitPrecondition => {has} (invert={Invert})");
         return Invert ? !has : has;
     }
 }

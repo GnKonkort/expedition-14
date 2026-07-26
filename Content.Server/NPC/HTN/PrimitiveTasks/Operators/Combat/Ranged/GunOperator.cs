@@ -69,7 +69,11 @@ public sealed partial class GunOperator : HTNOperator, IHtnConditionalShutdown
 
         var owner = blackboard.GetValue<EntityUid>(NPCBlackboard.Owner);
         if (ammo.TryGetOwnedGun(owner, out var gun, out _, blackboard))
+        {
+            // Clear charge-wait when resuming fire with a full gun (Plan cannot mutate read-only BB).
+            ammo.TryClearEnergyChargeWaitIfReady(gun, blackboard);
             ammo.TryEnsureWielded(owner, gun);
+        }
 
         var ranged = _entManager.EnsureComponent<NPCRangedCombatComponent>(owner);
         ranged.Target = blackboard.GetValue<EntityUid>(TargetKey);

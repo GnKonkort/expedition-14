@@ -37,7 +37,13 @@ public sealed partial class GunSystem
 
     private void OnBatteryChargeChange<T>(Entity<T> entity, ref ChargeChangedEvent args) where T : BatteryAmmoProviderComponent
     {
-        UpdateShots(entity, entity.Comp, args.Charge, args.MaxCharge);
+        // Hybrid guns (Battery + PowerCellSlot, e.g. misparented Svalinn) receive ChargeChanged
+        // only for the built-in Battery. Using those args alone stomps Shots to 0 while a full
+        // cell is seated. Always re-query total charge when a cell slot is present.
+        if (HasComp<PowerCellSlotComponent>(entity))
+            UpdateShots(entity, entity.Comp);
+        else
+            UpdateShots(entity, entity.Comp, args.Charge, args.MaxCharge);
     }
 
     private void OnPowerCellChanged<T>(Entity<T> entity, ref PowerCellChangedEvent args) where T : BatteryAmmoProviderComponent
