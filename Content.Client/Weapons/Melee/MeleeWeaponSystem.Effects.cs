@@ -216,7 +216,7 @@ public sealed partial class MeleeWeaponSystem
         var query = EntityQueryEnumerator<TrackUserComponent, TransformComponent>();
         while (query.MoveNext(out var uid, out var arcComponent, out var xform))
         {
-            if (arcComponent.User == null)
+            if (arcComponent.User == null || TerminatingOrDeleted(arcComponent.User)) // Goobstation
                 continue;
 
             Vector2 targetPos = TransformSystem.GetWorldPosition(arcComponent.User.Value);
@@ -229,5 +229,13 @@ public sealed partial class MeleeWeaponSystem
 
             TransformSystem.SetWorldPosition(uid, targetPos);
         }
+    }
+
+    private Angle? GetParentRotation(TransformComponent xform) // Goobstation
+    {
+        if (xform.ParentUid == xform.GridUid || xform.ParentUid == xform.MapUid || !Exists(xform.ParentUid))
+            return TransformSystem.GetWorldRotation(xform);
+
+        return null;
     }
 }
