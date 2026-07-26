@@ -1,0 +1,8 @@
+- type: entity
+  id: ExpeditionGameRule
+  parent: BaseGameRule
+  components:
+  - type: GameRule
+    minPlayers: 0
+  - type: ExpeditionRule
+    expeditionName: "testtest"
