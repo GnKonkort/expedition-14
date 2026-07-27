@@ -6,3 +6,34 @@
   - type: NPCPathfindPoint
   - type: Sprite
     state: pink
+
+# Debug / test marker for NPC squad rally points (spawned by NPCSquadSystem).
+- type: entity
+  id: NPCSquadRallyMarker
+  name: squad rally
+  description: Debug marker for where an NPC squad gathers.
+  categories: [ HideSpawnMenu ]
+  components:
+  - type: Transform
+    anchored: false
+  - type: Marker
+  - type: Clickable
+  - type: Tag
+    tags:
+    - HideContextMenu
+  - type: Sprite
+    drawdepth: Overdoors
+    sprite: Markers/cross.rsi
+    layers:
+    - state: green
+      shader: unshaded
+    - state: timed
+      shader: unshaded
+      color: "#55ff55"
+  - type: PointLight
+    enabled: true
+    color: "#44ff66"
+    radius: 3.5
+    energy: 2.5
+    netsync: false
+  - type: NPCSquadRallyMarker

@@ -3,7 +3,9 @@ using System.Threading.Tasks;
 using Content.Server.NPC.Components;
 using Content.Server.NPC.Pathfinding;
 using Content.Server.NPC.Systems;
-using Content.Shared.Cover;
+using Content.Shared.Climbing.Components;
+using Content.Shared.Climbing.Systems;
+using Content.Shared.Interaction;
 using Robust.Shared.Map;
 using Robust.Shared.Map.Components;
 using Robust.Shared.Physics.Components;
@@ -19,7 +21,8 @@ public sealed partial class MoveToOperator : HTNOperator, IHtnConditionalShutdow
     private NPCSteeringSystem _steering = default!;
     private PathfindingSystem _pathfind = default!;
     private SharedTransformSystem _transform = default!;
-    private SharedCoverSystem _sharedCover = default!;
+    private ClimbSystem _climb = default!;
+    private SharedInteractionSystem _interaction = default!;
 
     /// <summary>
     /// When to shut the task down.
@@ -64,6 +67,12 @@ public sealed partial class MoveToOperator : HTNOperator, IHtnConditionalShutdow
     public bool StopOnLineOfSight;
 
     private const string MovementCancelToken = "MovementCancelToken";
+    private const string CoverRubTimeKey = "CoverRubTime";
+
+    /// <summary>
+    /// How long the NPC must be stuck against a barricade before vaulting.
+    /// </summary>
+    private const float CoverRubClimbDelay = 1.5f;
 
     public override void Initialize(IEntitySystemManager sysManager)
     {
@@ -71,7 +80,8 @@ public sealed partial class MoveToOperator : HTNOperator, IHtnConditionalShutdow
         _pathfind = sysManager.GetEntitySystem<PathfindingSystem>();
         _steering = sysManager.GetEntitySystem<NPCSteeringSystem>();
         _transform = sysManager.GetEntitySystem<SharedTransformSystem>();
-        _sharedCover = sysManager.GetEntitySystem<SharedCoverSystem>();
+        _climb = sysManager.GetEntitySystem<ClimbSystem>();
+        _interaction = sysManager.GetEntitySystem<SharedInteractionSystem>();
     }
 
     public override async Task<(bool Valid, Dictionary<string, object>? Effects)> Plan(NPCBlackboard blackboard,
@@ -113,25 +123,59 @@ public sealed partial class MoveToOperator : HTNOperator, IHtnConditionalShutdow
             });
         }
 
+        var flags = _pathfind.GetFlags(blackboard);
         var path = await _pathfind.GetPath(
-            blackboard.GetValue<EntityUid>(NPCBlackboard.Owner),
+            owner,
             xform.Coordinates,
-                targetCoordinates,
+            targetCoordinates,
             range,
             cancelToken,
-            _pathfind.GetFlags(blackboard));
+            flags);
+
+        var needClimb = false;
+        var steeringSys = _entManager.System<NPCSteeringSystem>();
+
+        // No walk-around path — allow climbing over climbable obstacles (barricades, etc.).
+        if (path.Result != PathResult.Path && (flags & PathFlags.Climbing) == 0x0)
+        {
+            steeringSys.ClimbDebug(owner, "PLAN NoPath → climb-retry");
+            flags |= PathFlags.Climbing;
+            path = await _pathfind.GetPath(
+                owner,
+                xform.Coordinates,
+                targetCoordinates,
+                range,
+                cancelToken,
+                flags);
+            needClimb = path.Result == PathResult.Path;
+            steeringSys.ClimbDebug(owner, $"PLAN climb-retry {(needClimb ? "OK" : "FAIL")}");
+        }
 
         if (path.Result != PathResult.Path)
         {
+            // Cover stand may still resolve at runtime (rub → vault).
+            if (blackboard.TryGetValue<EntityUid>(NPCCoverSystem.CoverEntityKey, out _, _entManager))
+            {
+                return (true, new Dictionary<string, object>
+                {
+                    { NPCBlackboard.OwnerCoordinates, targetCoordinates },
+                    { NPCBlackboard.NavClimb, true },
+                });
+            }
+
             return (false, null);
         }
 
-        return (true, new Dictionary<string, object>()
+        var effects = new Dictionary<string, object>
         {
-            {NPCBlackboard.OwnerCoordinates, targetCoordinates},
-            {PathfindKey, path}
-        });
+            { NPCBlackboard.OwnerCoordinates, targetCoordinates },
+            { PathfindKey, path },
+        };
 
+        if (needClimb)
+            effects[NPCBlackboard.NavClimb] = true;
+
+        return (true, effects);
     }
 
     // Given steering is complicated we'll hand it off to a dedicated system rather than this singleton operator.
@@ -148,6 +192,8 @@ public sealed partial class MoveToOperator : HTNOperator, IHtnConditionalShutdow
         // Re-use the path we may have if applicable.
         var comp = _steering.Register(uid, targetCoordinates);
         comp.ArriveOnLineOfSight = StopOnLineOfSight;
+        // Keep climb/pry/smash flags in sync with the plan (e.g. climb fallback).
+        comp.Flags = _pathfind.GetFlags(blackboard);
 
         if (blackboard.TryGetValue<float>(RangeKey, out var range, _entManager))
         {
@@ -181,35 +227,151 @@ public sealed partial class MoveToOperator : HTNOperator, IHtnConditionalShutdow
 
         if (blackboard.TryGetValue<EntityUid>(NPCCoverSystem.CoverEntityKey, out var coverEnt, _entManager))
         {
-            var coverSys = _entManager.System<NPCCoverSystem>();
-            var onFace = _sharedCover.ShouldDirectionalBlock(coverEnt, _transform.GetMapCoordinates(owner));
-
-            // Do not grind the face fixture — fail cover seek unless climbing is enabled.
-            if (_entManager.HasComponent<DirectionalCoverComponent>(coverEnt) &&
-                onFace &&
-                steering.Status == SteeringStatus.NoPath &&
-                !blackboard.GetValueOrDefault<bool>(NPCBlackboard.NavClimb, _entManager))
-                return HTNOperatorStatus.Failed;
-
-            // Distance arrival alone accepts the neighboring flank; require the target tile.
-            if (steering.Status == SteeringStatus.InRange &&
-                blackboard.TryGetValue<EntityCoordinates>(TargetKey, out var coverTarget, _entManager) &&
-                !coverSys.IsAtCoverStand(owner, coverTarget))
+            // Cover may have been deleted while the HTN plan still references it.
+            if (!_entManager.EntityExists(coverEnt))
             {
-                steering.Range = System.Math.Min(steering.Range, 0.2f);
-                steering.Status = SteeringStatus.Moving;
-                steering.ForceMove = true;
-                return HTNOperatorStatus.Continuing;
+                blackboard.Remove<EntityUid>(NPCCoverSystem.CoverEntityKey);
+                blackboard.Remove<float>(CoverRubTimeKey);
+            }
+            else
+            {
+                var coverSys = _entManager.System<NPCCoverSystem>();
+
+                // Already behind / on the cade — stop pathing even if steering still says NoPath.
+                if (blackboard.TryGetValue<EntityCoordinates>(NPCCoverSystem.CoverCoordinatesKey, out var standPos, _entManager) &&
+                    coverSys.IsInCoverPosition(owner, coverEnt, standPos))
+                {
+                    blackboard.Remove<float>(CoverRubTimeKey);
+                    coverSys.Debug($"MOVE Finished {ToPretty(owner)} cover={ToPretty(coverEnt)} reason=in-cover-pos steer={steering.Status}");
+                    return HTNOperatorStatus.Finished;
+                }
+
+                // Distance arrival alone accepts the neighboring flank; require the target tile.
+                if (steering.Status == SteeringStatus.InRange &&
+                    blackboard.TryGetValue<EntityCoordinates>(TargetKey, out var coverTarget, _entManager) &&
+                    !coverSys.IsAtCoverStand(owner, coverTarget))
+                {
+                    coverSys.Debug($"MOVE flank-reject {ToPretty(owner)} status=InRange not-on-stand → ForceMove");
+                    steering.Range = System.Math.Min(steering.Range, 0.2f);
+                    steering.Status = SteeringStatus.Moving;
+                    steering.ForceMove = true;
+                }
+
+                if (TryHandleCoverRubClimb(blackboard, owner, coverEnt, steering, frameTime, out var rubStatus))
+                    return rubStatus;
             }
         }
 
-        return steering.Status switch
+        var result = steering.Status switch
         {
             SteeringStatus.InRange => HTNOperatorStatus.Finished,
             SteeringStatus.NoPath => HTNOperatorStatus.Failed,
             SteeringStatus.Moving => HTNOperatorStatus.Continuing,
             _ => throw new ArgumentOutOfRangeException()
         };
+
+        if (result != HTNOperatorStatus.Continuing &&
+            blackboard.TryGetValue<EntityUid>(NPCCoverSystem.CoverEntityKey, out var coverLog, _entManager))
+        {
+            _entManager.System<NPCCoverSystem>().Debug(
+                $"MOVE {result} {ToPretty(owner)} cover={ToPretty(coverLog)} steer={steering.Status}");
+        }
+
+        return result;
+    }
+
+    private string ToPretty(EntityUid uid) => _entManager.ToPrettyString(uid);
+
+    /// <summary>
+    /// Vault only when stuck with NoPath against the barricade for <see cref="CoverRubClimbDelay"/>.
+    /// Walking past / toward the rear must not start a climb.
+    /// </summary>
+    private bool TryHandleCoverRubClimb(
+        NPCBlackboard blackboard,
+        EntityUid owner,
+        EntityUid cover,
+        NPCSteeringComponent steering,
+        float frameTime,
+        out HTNOperatorStatus status)
+    {
+        status = HTNOperatorStatus.Continuing;
+
+        var coverSys = _entManager.System<NPCCoverSystem>();
+        var steeringSys = _entManager.System<NPCSteeringSystem>();
+
+        // Still vaulting / climbing — wait it out. Do NOT ForceMove (BreakOnMove cancels the bar).
+        if (_entManager.TryGetComponent(owner, out ClimbingComponent? climbing) &&
+            (climbing.DoAfter != null || climbing.NextTransition != null || climbing.IsClimbing))
+        {
+            steeringSys.ClimbDebug(owner,
+                $"COVER-RUB climb-wait isClimbing={climbing.IsClimbing} doAfter={climbing.DoAfter != null} transition={climbing.NextTransition != null}");
+            if (coverSys.DebugEnabled)
+                coverSys.Debug($"MOVE climb-wait {ToPretty(owner)} cover={ToPretty(cover)} climbing={climbing.IsClimbing} doAfter={climbing.DoAfter != null}");
+            blackboard.SetValue(NPCBlackboard.NavClimb, true);
+            steering.Status = SteeringStatus.Moving;
+            steering.ForceMove = false;
+            status = HTNOperatorStatus.Continuing;
+            return true;
+        }
+
+        // Only rub when pathfinding has failed — not while still moving alongside the cade.
+        if (steering.Status != SteeringStatus.NoPath)
+        {
+            blackboard.Remove<float>(CoverRubTimeKey);
+            return false;
+        }
+
+        // Only vault the reserved cover when standing on the adjacent tile.
+        const float coverClimbRange = 1.25f;
+        if (!_interaction.InRangeUnobstructed(owner, cover, coverClimbRange))
+        {
+            steeringSys.ClimbDebug(owner, $"COVER-RUB out-of-range cover={ToPretty(cover)}");
+            blackboard.Remove<float>(CoverRubTimeKey);
+            return false;
+        }
+
+        var rubTime = blackboard.GetValueOrDefault<float>(CoverRubTimeKey, _entManager) + frameTime;
+        blackboard.SetValue(CoverRubTimeKey, rubTime);
+
+        // Keep pressing into the barricade until the climb delay elapses.
+        if (rubTime < CoverRubClimbDelay)
+        {
+            if (coverSys.DebugEnabled && (int)(rubTime * 10) != (int)((rubTime - frameTime) * 10))
+                coverSys.Debug($"MOVE rub {ToPretty(owner)} cover={ToPretty(cover)} t={rubTime:F1}/{CoverRubClimbDelay:F1} steer=NoPath");
+            steeringSys.ClimbDebug(owner, $"COVER-RUB pressing t={rubTime:F1}/{CoverRubClimbDelay:F1}");
+            steering.Status = SteeringStatus.Moving;
+            steering.ForceMove = true;
+            status = HTNOperatorStatus.Continuing;
+            return true;
+        }
+
+        if (!_entManager.TryGetComponent(cover, out ClimbableComponent? climbable) ||
+            !_entManager.TryGetComponent(owner, out ClimbingComponent? climbComp))
+        {
+            coverSys.Debug($"MOVE rub-fail {ToPretty(owner)} cover={ToPretty(cover)} reason=not-climbable");
+            steeringSys.ClimbDebug(owner, $"COVER-RUB fail not-climbable cover={ToPretty(cover)}");
+            status = HTNOperatorStatus.Failed;
+            return true;
+        }
+
+        if (_climb.CanVault(climbable, owner, cover, out var reason) &&
+            _climb.TryClimb(owner, owner, cover, out _, climbable, climbComp))
+        {
+            coverSys.Debug($"MOVE climb-start {ToPretty(owner)} cover={ToPretty(cover)} after-rub={rubTime:F1}s");
+            steeringSys.ClimbDebug(owner, $"COVER-RUB climb-start cover={ToPretty(cover)} → HOLD (no ForceMove)");
+            blackboard.SetValue(NPCBlackboard.NavClimb, true);
+            blackboard.Remove<float>(CoverRubTimeKey);
+            steering.Status = SteeringStatus.Moving;
+            // Critical: stop moving or BreakOnMove cancels the vault progress bar.
+            steering.ForceMove = false;
+            status = HTNOperatorStatus.Continuing;
+            return true;
+        }
+
+        coverSys.Debug($"MOVE rub-fail {ToPretty(owner)} cover={ToPretty(cover)} reason=vault-failed");
+        steeringSys.ClimbDebug(owner, $"COVER-RUB vault-failed cover={ToPretty(cover)} reason={reason}");
+        status = HTNOperatorStatus.Failed;
+        return true;
     }
 
     public void ConditionalShutdown(NPCBlackboard blackboard)
@@ -223,6 +385,8 @@ public sealed partial class MoveToOperator : HTNOperator, IHtnConditionalShutdow
 
         // OwnerCoordinates is only used in planning so dump it.
         blackboard.Remove<PathResultEvent>(PathfindKey);
+        blackboard.Remove<float>(CoverRubTimeKey);
+        // Do not force NavClimb false — humanoid hostiles keep vaulting barricades on the route.
 
         if (RemoveKeyOnFinish)
         {

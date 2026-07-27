@@ -28,6 +28,10 @@
     - type: HTN
       rootTask:
         task: SimpleHumanoidHostileCompound
+    - type: NPCSquadMember
+      joinRange: 8
+      leaveRange: 14
+      rallyRadius: 2.5
 
 - type: entity
   name: spirate
@@ -46,6 +50,10 @@
   - type: HTN
     rootTask:
       task: SimpleHumanoidHostileCompound
+  - type: NPCSquadMember
+    joinRange: 8
+    leaveRange: 14
+    rallyRadius: 2.5
 
 - type: entity
   name: syndicate footsoldier
@@ -63,6 +71,10 @@
     - type: HTN
       rootTask:
         task: SimpleHumanoidHostileCompound
+    - type: NPCSquadMember
+      joinRange: 8
+      leaveRange: 14
+      rallyRadius: 2.5
 
 - type: entity
   name: syndicate shuttle pilot

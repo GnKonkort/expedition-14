@@ -5,7 +5,9 @@ using Content.Server.Administration.Managers;
 using Content.Server.DoAfter;
 using Content.Server.NPC.Components;
 using Content.Server.NPC.Events;
+using Content.Server.NPC.HTN;
 using Content.Server.NPC.Pathfinding;
+using Content.Server.NPC;
 using Content.Shared.CCVar;
 using Content.Shared.Climbing.Systems;
 using Content.Shared.CombatMode;
@@ -31,6 +33,7 @@ using Robust.Shared.Utility;
 using Content.Shared.Prying.Systems;
 using Microsoft.Extensions.ObjectPool;
 using Prometheus;
+using ClimbingComponent = Content.Shared.Climbing.Components.ClimbingComponent;
 
 namespace Content.Server.NPC.Systems;
 
@@ -86,6 +89,8 @@ public sealed partial class NPCSteeringSystem : SharedNPCSteeringSystem
 
     private bool _pathfinding = true;
 
+    private bool _debugClimb;
+
     public static readonly Vector2[] Directions = new Vector2[InterestDirections];
 
     private readonly HashSet<ICommonSession> _subscribedSessions = new();
@@ -113,9 +118,23 @@ public sealed partial class NPCSteeringSystem : SharedNPCSteeringSystem
         UpdatesBefore.Add(typeof(SharedPhysicsSystem));
         Subs.CVar(_configManager, CCVars.NPCEnabled, SetNPCEnabled, true);
         Subs.CVar(_configManager, CCVars.NPCPathfinding, SetNPCPathfinding, true);
+        _debugClimb = _configManager.GetCVar(CCVars.NPCDebugClimb);
+        Subs.CVar(_configManager, CCVars.NPCDebugClimb, v =>
+        {
+            _debugClimb = v;
+            Log.Info($"[npc.climb] npc.debug_climb={(v ? "ON" : "OFF")}");
+        });
 
         SubscribeLocalEvent<NPCSteeringComponent, ComponentShutdown>(OnSteeringShutdown);
         SubscribeNetworkEvent<RequestNPCSteeringDebugEvent>(OnDebugRequest);
+    }
+
+    public void ClimbDebug(EntityUid uid, string message)
+    {
+        if (!_debugClimb)
+            return;
+
+        Log.Info($"[npc.climb] {ToPrettyString(uid)} {message}");
     }
 
     private void SetNPCEnabled(bool obj)
@@ -178,6 +197,7 @@ public sealed partial class NPCSteeringSystem : SharedNPCSteeringSystem
             component.PathfindToken?.Cancel();
             component.PathfindToken = null;
             component.CurrentPath.Clear();
+            component.Flags = _pathfindingSystem.GetFlags(uid);
         }
         else
         {
@@ -364,6 +384,14 @@ public sealed partial class NPCSteeringSystem : SharedNPCSteeringSystem
             return;
         }
 
+        // Safety: if a vault started during Seek, never apply residual interest this tick.
+        if (TryComp<ClimbingComponent>(uid, out var postClimb) &&
+            (postClimb.DoAfter != null || postClimb.NextTransition != null))
+        {
+            HoldStillForClimb(uid, mover, steering, interest);
+            return;
+        }
+
         DebugTools.Assert(!float.IsNaN(interest[0]));
 
         // Don't steer too frequently to avoid twitchiness.
@@ -449,6 +477,7 @@ public sealed partial class NPCSteeringSystem : SharedNPCSteeringSystem
         steering.PathfindToken = new CancellationTokenSource();
 
         var flags = _pathfindingSystem.GetFlags(uid);
+        steering.Flags = flags;
 
         var result = await _pathfindingSystem.GetPathSafe(
             uid,
@@ -457,6 +486,32 @@ public sealed partial class NPCSteeringSystem : SharedNPCSteeringSystem
             steering.Range,
             steering.PathfindToken.Token,
             flags);
+
+        // No walk-around route — retry allowing climbables (barricades, tables, railings).
+        if (result.Result == PathResult.NoPath && (flags & PathFlags.Climbing) == 0x0)
+        {
+            ClimbDebug(uid, $"PATH NoPath without Climbing → retry with Climbing");
+            flags |= PathFlags.Climbing;
+            result = await _pathfindingSystem.GetPathSafe(
+                uid,
+                xform.Coordinates,
+                steering.Coordinates,
+                steering.Range,
+                steering.PathfindToken.Token,
+                flags);
+
+            if (result.Result == PathResult.Path)
+            {
+                steering.Flags |= PathFlags.Climbing;
+                if (TryComp<HTNComponent>(uid, out var htn))
+                    htn.Blackboard.SetValue(NPCBlackboard.NavClimb, true);
+                ClimbDebug(uid, $"PATH climb-retry OK nodes={result.Path.Count}");
+            }
+            else
+            {
+                ClimbDebug(uid, "PATH climb-retry still NoPath");
+            }
+        }
 
         steering.PathfindToken = null;
 
@@ -472,6 +527,8 @@ public sealed partial class NPCSteeringSystem : SharedNPCSteeringSystem
 
             return;
         }
+
+        steering.FailedPathCount = 0;
 
         var targetPos = _transform.ToMapCoordinates(steering.Coordinates);
         var ourPos = _transform.GetMapCoordinates(uid, xform: xform);

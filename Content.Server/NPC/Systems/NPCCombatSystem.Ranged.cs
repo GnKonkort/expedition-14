@@ -129,7 +129,7 @@ public sealed partial class NPCCombatSystem
 
             var worldPos = _transform.GetWorldPosition(xform);
             var targetPos = _transform.GetWorldPosition(targetXform);
-            
+
             // Frontier -- Ranged NPC miss chance
             if (_random.Prob(comp.MissChance))
             {
@@ -219,6 +219,8 @@ public sealed partial class NPCCombatSystem
                 return;
             }
 
+            // Squadmates in the shot line are ignored by projectile/hitscan FF rules
+            // (NPCSquadFriendlyFireSystem + GunSystem hitscan skip) — still fire.
             _gun.AttemptShoot(uid, gunUid, gun, targetCordinates, comp.Target);
         }
     }

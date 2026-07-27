@@ -39,6 +39,7 @@ public sealed partial class NPCBlackboard : IEnumerable<KeyValuePair<string, obj
         {"AggroVisionRadius", 10f},
         {"AmmoSearchRange", 7f},
         {"AmmoLootHostileRange", 4f},
+        {"SquadRallyRange", 2.5f},
     };
 
     /// <summary>
@@ -301,6 +302,13 @@ public sealed partial class NPCBlackboard : IEnumerable<KeyValuePair<string, obj
     public const string MeleeMissChance = "MeleeMissChance";
 
     public const string PreferredRangedRange = "PreferredRangedRange";
+    public const string SquadRallyCoordinates = "SquadRallyCoordinates";
+    public const string SquadRallyRange = "SquadRallyRange";
+    public const string SquadLeader = "SquadLeader";
+    public const string GrenadeCooldownStart = "GrenadeCooldownStart";
+    public const string GrenadeCooldownEnd = "GrenadeCooldownEnd";
+    public const string GrenadeCombatStart = "GrenadeCombatStart";
+    public const string GrenadeCombatTarget = "GrenadeCombatTarget";
     public const string Owner = "Owner";
     public const string OwnerCoordinates = "OwnerCoordinates";
     public const string MovementTarget = "MovementTarget";

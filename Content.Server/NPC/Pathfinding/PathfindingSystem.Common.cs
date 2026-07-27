@@ -52,12 +52,23 @@ public sealed partial class PathfindingSystem
             return 0f;
         }
 
+        var isClimb = (end.Data.Flags & PathfindingBreadcrumbFlag.Climb) != 0x0;
+
+        // Prefer walking around barricades/tables. Climb polys are expensive even with
+        // NavClimb so A* only vaults when it is the short/only route — not a cade 3 tiles away.
+        if (isClimb)
+        {
+            if ((request.Flags & PathFlags.Climbing) == 0x0)
+                modifier += 3.5f;
+            else
+                modifier += 2.5f;
+        }
+
         if ((request.CollisionLayer & end.Data.CollisionMask) != 0x0 ||
             (request.CollisionMask & end.Data.CollisionLayer) != 0x0)
         {
             var isDoor = (end.Data.Flags & PathfindingBreadcrumbFlag.Door) != 0x0;
             var isAccess = (end.Data.Flags & PathfindingBreadcrumbFlag.Access) != 0x0;
-            var isClimb = (end.Data.Flags & PathfindingBreadcrumbFlag.Climb) != 0x0;
 
             // TODO: Handling power + door prying
             // Door we should be able to open
@@ -70,13 +81,14 @@ public sealed partial class PathfindingSystem
             {
                 modifier += 10f;
             }
-            else if ((request.Flags & PathFlags.Smashing) != 0x0 && end.Data.Damage > 0f)
-            {
-                modifier += 10f + end.Data.Damage / 100f;
-            }
+            // Prefer vaulting climbables over smashing them when both are allowed.
             else if (isClimb && (request.Flags & PathFlags.Climbing) != 0x0)
             {
                 modifier += 0.5f;
+            }
+            else if ((request.Flags & PathFlags.Smashing) != 0x0 && end.Data.Damage > 0f)
+            {
+                modifier += 10f + end.Data.Damage / 100f;
             }
             else
             {

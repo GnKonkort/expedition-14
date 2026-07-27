@@ -48,7 +48,10 @@ public sealed partial class PickCoverOperator : HTNOperator
     {
         var owner = blackboard.GetValue<EntityUid>(NPCBlackboard.Owner);
         if (!blackboard.TryGetValue<EntityUid>(TargetKey, out var target, _entManager))
+        {
+            _cover.Debug($"PICK plan FAIL {ToPretty(owner)} reason=no-target");
             return (false, null);
+        }
 
         var searchRange = blackboard.GetValueOrDefault<float>(SearchRangeKey, _entManager);
         if (searchRange <= 0f)
@@ -59,8 +62,12 @@ public sealed partial class PickCoverOperator : HTNOperator
             return (false, null);
 
         if (!_cover.IsSlotFree(slot, owner))
+        {
+            _cover.Debug($"PICK plan FAIL {ToPretty(owner)} reason=slot-not-free-after-select");
             return (false, null);
+        }
 
+        _cover.Debug($"PICK plan OK {ToPretty(owner)} cover={ToPretty(coverEntity)}");
         return (true, new Dictionary<string, object>
         {
             { CoverCoordinatesKey, stand },
@@ -80,20 +87,27 @@ public sealed partial class PickCoverOperator : HTNOperator
         var owner = blackboard.GetValue<EntityUid>(NPCBlackboard.Owner);
 
         if (!blackboard.TryGetValue<NPCCoverSystem.CoverSlotId>(CoverSlotKey, out var slot, _entManager))
+        {
+            _cover.Debug($"PICK startup FAIL {ToPretty(owner)} reason=no-slot-key");
             return;
+        }
 
         _cover.ReleaseAll(owner);
         if (!_cover.TryReserve(slot, owner))
         {
+            _cover.Debug($"PICK startup FAIL {ToPretty(owner)} reason=reserve-failed");
             blackboard.Remove<NPCCoverSystem.CoverSlotId>(CoverSlotKey);
             return;
         }
+
+        _cover.Debug($"PICK startup OK {ToPretty(owner)}");
     }
 
     public override void PlanShutdown(NPCBlackboard blackboard)
     {
         base.PlanShutdown(blackboard);
         var owner = blackboard.GetValue<EntityUid>(NPCBlackboard.Owner);
+        _cover.Debug($"PICK plan-shutdown {ToPretty(owner)}");
         _cover.ReleaseAll(owner);
         blackboard.Remove<EntityCoordinates>(CoverCoordinatesKey);
         blackboard.Remove<EntityCoordinates>(CoverApproachCoordinatesKey);
@@ -108,6 +122,7 @@ public sealed partial class PickCoverOperator : HTNOperator
             return;
 
         var owner = blackboard.GetValue<EntityUid>(NPCBlackboard.Owner);
+        _cover.Debug($"PICK task-fail {ToPretty(owner)}");
         _cover.ReleaseAll(owner);
     }
 
@@ -115,12 +130,20 @@ public sealed partial class PickCoverOperator : HTNOperator
     {
         var owner = blackboard.GetValue<EntityUid>(NPCBlackboard.Owner);
         if (!blackboard.TryGetValue<NPCCoverSystem.CoverSlotId>(CoverSlotKey, out var slot, _entManager))
+        {
+            _cover.Debug($"PICK update FAIL {ToPretty(owner)} reason=no-slot");
             return HTNOperatorStatus.Failed;
+        }
 
         if (!_cover.IsSlotFree(slot, owner) && !_cover.TryReserve(slot, owner))
+        {
+            _cover.Debug($"PICK update FAIL {ToPretty(owner)} reason=cannot-reserve");
             return HTNOperatorStatus.Failed;
+        }
 
         _cover.TryReserve(slot, owner);
         return HTNOperatorStatus.Finished;
     }
+
+    private string ToPretty(EntityUid uid) => _entManager.ToPrettyString(uid);
 }

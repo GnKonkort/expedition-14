@@ -380,13 +380,17 @@
        task: SimpleHostileCompound
     blackboard:
       NavClimb: !type:Bool
-        false
+        true
       NavInteract: !type:Bool
         true
       NavPry: !type:Bool
         true
       NavSmash: !type:Bool # They use this option too much for my liking, but I'll keep it here as an option
         true
+  - type: NPCSquadMember
+    joinRange: 8
+    leaveRange: 14
+    rallyRadius: 2.5
 
 - type: entity
   id: MobHumanoidHostileAISimpleRanged
@@ -397,13 +401,17 @@
        task: SimpleRangedHostileCompound
     blackboard:
       NavClimb: !type:Bool
-        false
+        true
       NavInteract: !type:Bool
         true
       NavPry: !type:Bool
         true
       NavSmash: !type:Bool # They use this option too much for my liking, but I'll keep it here as an option
         true
+  - type: NPCSquadMember
+    joinRange: 8
+    leaveRange: 14
+    rallyRadius: 2.5
 
 - type: entity
   id: MobHumanoidHostileAIComplex
@@ -414,13 +422,17 @@
        task: SimpleHumanoidHostileCompound
     blackboard:
       NavClimb: !type:Bool
-        false
+        true
       NavInteract: !type:Bool
         true
       NavPry: !type:Bool
         true
 #      NavSmash: !type:Bool # They use this option too much for my liking, but I'll keep it here as an option
 #        true
+  - type: NPCSquadMember
+    joinRange: 8
+    leaveRange: 14
+    rallyRadius: 2.5
 #endregion
 
 #region NPC types

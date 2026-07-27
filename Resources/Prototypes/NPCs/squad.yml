@@ -1,0 +1,71 @@
+# Squad movement: gather near the shared rally point when not in combat,
+# then wander within the gather radius around that point.
+# Formation / rally updates are driven by NPCSquadSystem (blackboard SquadRallyCoordinates).
+
+- type: htnCompound
+  id: SquadRallyCompound
+  branches:
+    # Too far from rally — return to the gather point.
+    - preconditions:
+        - !type:SquadActivePrecondition
+      tasks:
+        - !type:HTNPrimitiveTask
+          preconditions:
+            - !type:CoordinatesNotInRangePrecondition
+              targetKey: SquadRallyCoordinates
+              rangeKey: SquadRallyRange
+          operator: !type:MoveToOperator
+            pathfindInPlanning: true
+            removeKeyOnFinish: false
+            targetKey: SquadRallyCoordinates
+            rangeKey: SquadRallyRange
+
+    # Already near rally and still waiting out an idle timer.
+    - preconditions:
+        - !type:SquadActivePrecondition
+      tasks:
+        - !type:HTNPrimitiveTask
+          preconditions:
+            - !type:KeyExistsPrecondition
+              key: IdleTime
+            - !type:CoordinatesInRangePrecondition
+              targetKey: SquadRallyCoordinates
+              rangeKey: SquadRallyRange
+          operator: !type:WaitOperator
+            key: IdleTime
+
+    # Near rally: pick a random tile around the rally and walk there, then idle briefly.
+    - preconditions:
+        - !type:SquadActivePrecondition
+      tasks:
+        - !type:HTNPrimitiveTask
+          preconditions:
+            - !type:CoordinatesInRangePrecondition
+              targetKey: SquadRallyCoordinates
+              rangeKey: SquadRallyRange
+          operator: !type:PickNearCoordinatesOperator
+            originKey: SquadRallyCoordinates
+            rangeKey: SquadRallyRange
+            targetCoordinates: SquadWanderTarget
+
+        - !type:HTNPrimitiveTask
+          operator: !type:MoveToOperator
+            pathfindInPlanning: false
+            targetKey: SquadWanderTarget
+            rangeKey: MovementRangeClose
+
+        - !type:HTNPrimitiveTask
+          operator: !type:RandomOperator
+            targetKey: IdleTime
+            minKey: MinimumIdleTime
+            maxKey: MaximumIdleTime
+
+        - !type:HTNPrimitiveTask
+          preconditions:
+            - !type:KeyExistsPrecondition
+              key: IdleTime
+            - !type:CoordinatesInRangePrecondition
+              targetKey: SquadRallyCoordinates
+              rangeKey: SquadRallyRange
+          operator: !type:WaitOperator
+            key: IdleTime

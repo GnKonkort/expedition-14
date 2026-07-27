@@ -94,6 +94,15 @@ public sealed partial class GunOperator : HTNOperator, IHtnConditionalShutdown
         ranged.UseOpaqueForLOSChecks = UseOpaqueForLOSChecks;
         ranged.StayPut = HoldCover;
 
+        if (HoldCover)
+        {
+            var coverSys = _entManager.System<NPCCoverSystem>();
+            var coverStr = blackboard.TryGetValue<EntityUid>(CoverEntityKey, out var cover, _entManager)
+                ? ToPretty(cover)
+                : "none";
+            coverSys.Debug($"GUN hold-start {ToPretty(owner)} cover={coverStr} target={ToPretty(ranged.Target)}");
+        }
+
         if (blackboard.TryGetValue<float>(NPCBlackboard.RotateSpeed, out var rotSpeed, _entManager))
         {
             ranged.RotationSpeed = new Angle(rotSpeed);
@@ -141,6 +150,9 @@ public sealed partial class GunOperator : HTNOperator, IHtnConditionalShutdown
                 switch (combat.Status)
                 {
                     case CombatStatus.TargetUnreachable:
+                        if (HoldCover)
+                            _entManager.System<NPCCoverSystem>().Debug(
+                                $"GUN unreachable {ToPretty(owner)} target={ToPretty(target)}");
                         status = HTNOperatorStatus.Failed;
                         break;
                     case CombatStatus.NotInSight:
@@ -177,20 +189,31 @@ public sealed partial class GunOperator : HTNOperator, IHtnConditionalShutdown
         var coverSys = _entManager.System<NPCCoverSystem>();
 
         if (!blackboard.TryGetValue<EntityUid>(CoverEntityKey, out var cover, _entManager))
+        {
+            coverSys.Debug($"GUN leave {ToPretty(owner)} reason=no-cover-key");
             return true;
+        }
 
         var meleeRange = blackboard.GetValueOrDefault<float>(MeleeRangeKey, _entManager);
         if (meleeRange <= 0f)
             meleeRange = 1f;
 
         if (coverSys.ShouldAbandonCover(owner, target, cover, meleeRange))
+        {
+            coverSys.Debug($"GUN leave {ToPretty(owner)} cover={ToPretty(cover)} reason=melee-or-inactive vs {ToPretty(target)}");
             return true;
+        }
 
         // Drifted off cover (face side / far from stand) — replan.
         if (blackboard.TryGetValue<EntityCoordinates>(CoverCoordinatesKey, out var stand, _entManager) &&
             !coverSys.IsInCoverPosition(owner, cover, stand))
+        {
+            coverSys.Debug($"GUN leave {ToPretty(owner)} cover={ToPretty(cover)} reason=not-in-cover-pos");
             return true;
+        }
 
         return false;
     }
+
+    private string ToPretty(EntityUid uid) => _entManager.ToPrettyString(uid);
 }

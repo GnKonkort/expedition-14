@@ -77,6 +77,9 @@
           task: MeleeCombatCompound
     - tasks:
         - !type:HTNCompoundTask
+          task: SquadRallyCompound
+    - tasks:
+        - !type:HTNCompoundTask
           task: IdleCompound
 
 - type: htnCompound
@@ -94,6 +97,10 @@
     - tasks:
         - !type:HTNCompoundTask
           task: MeleeCombatCompound
+    # Outside combat: keep the squad gathered around the shared rally point.
+    - tasks:
+        - !type:HTNCompoundTask
+          task: SquadRallyCompound
     # Holster gun + stow held ammo after a long stretch without hostiles.
     - tasks:
         - !type:HTNCompoundTask

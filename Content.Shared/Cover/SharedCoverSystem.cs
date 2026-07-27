@@ -115,7 +115,9 @@ public sealed class SharedCoverSystem : EntitySystem
 
     public bool ShouldDirectionalBlock(EntityUid cover, MapCoordinates shotOrigin)
     {
-        var coverXform = Transform(cover);
+        if (!TryComp(cover, out TransformComponent? coverXform))
+            return false;
+
         var coverMap = _transform.GetMapCoordinates(cover, xform: coverXform);
         if (coverMap.MapId != shotOrigin.MapId)
             return false;
@@ -162,7 +164,10 @@ public sealed class SharedCoverSystem : EntitySystem
 
     public Vector2 GetDirectionalCoverFace(EntityUid cover)
     {
-        return _transform.GetWorldRotation(cover).RotateVec(new Vector2(0f, -1f));
+        if (!TryComp(cover, out TransformComponent? xform))
+            return Vector2.Zero;
+
+        return _transform.GetWorldRotation(xform).RotateVec(new Vector2(0f, -1f));
     }
 
     public Vector2i GetDefenderApproachOffset(EntityUid cover)

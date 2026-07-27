@@ -1,8 +1,10 @@
 using System.Numerics;
+using Content.Shared.CCVar;
 using Content.Shared.Cover;
 using Content.Shared.Interaction;
 using Content.Shared.Maps;
 using Content.Shared.Physics;
+using Robust.Shared.Configuration;
 using Robust.Shared.Map;
 using Robust.Shared.Map.Components;
 
@@ -27,6 +29,12 @@ public sealed class NPCCoverSystem : EntitySystem
     /// Keep well under 0.5 so the point stays clear of the table fixture (else MoveTo NoPath).
     /// </summary>
     public const float TableStandEdgeNudge = 0.3f;
+
+    /// <summary>
+    /// Push the barricade stand further into the rear tile, away from the thin cade strip
+    /// on the shared edge (cade fixture sits on the cover tile's face side).
+    /// </summary>
+    public const float BarricadeStandNudge = 0.28f;
     public const string CoverCoordinatesKey = "CoverCoordinates";
     public const string CoverApproachCoordinatesKey = "CoverApproachCoordinates";
     public const string CoverRearCoordinatesKey = "CoverRearCoordinates";
@@ -40,11 +48,15 @@ public sealed class NPCCoverSystem : EntitySystem
     [Dependency] private readonly SharedTransformSystem _transform = default!;
     [Dependency] private readonly SharedInteractionSystem _interaction = default!;
     [Dependency] private readonly TurfSystem _turf = default!;
+    [Dependency] private readonly IConfigurationManager _cfg = default!;
 
     private readonly Dictionary<CoverSlotId, EntityUid> _reservations = new();
     private EntityQuery<DirectionalCoverComponent> _directionalQuery;
     private EntityQuery<ProbabilisticCoverComponent> _probQuery;
     private EntityQuery<TransformComponent> _xformQuery;
+    private bool _debug;
+
+    public bool DebugEnabled => _debug;
 
     public override void Initialize()
     {
@@ -52,9 +64,24 @@ public sealed class NPCCoverSystem : EntitySystem
         _directionalQuery = GetEntityQuery<DirectionalCoverComponent>();
         _probQuery = GetEntityQuery<ProbabilisticCoverComponent>();
         _xformQuery = GetEntityQuery<TransformComponent>();
+
+        _debug = _cfg.GetCVar(CCVars.NPCDebugCover);
+        Subs.CVar(_cfg, CCVars.NPCDebugCover, v =>
+        {
+            _debug = v;
+            Debug($"npc.debug_cover={(v ? "ON" : "OFF")}");
+        });
     }
 
     public readonly record struct CoverSlotId(EntityUid? CoverEntity, EntityUid Grid, Vector2i Tile);
+
+    public void Debug(string message)
+    {
+        if (!_debug)
+            return;
+
+        Log.Info($"[npc.cover] {message}");
+    }
 
     public void ReleaseAll(EntityUid npc)
     {
@@ -71,7 +98,10 @@ public sealed class NPCCoverSystem : EntitySystem
             return;
 
         foreach (var slot in remove)
+        {
             _reservations.Remove(slot);
+            Debug($"RELEASE {ToPrettyString(npc)} slot={DescribeSlot(slot)}");
+        }
     }
 
     public bool IsSlotFree(CoverSlotId slot, EntityUid npc)
@@ -95,6 +125,7 @@ public sealed class NPCCoverSystem : EntitySystem
     {
         if (!IsSlotFree(slot, npc))
         {
+            Debug($"RESERVE FAIL {ToPrettyString(npc)} slot={DescribeSlot(slot)} reason=slot-taken");
             return false;
         }
 
@@ -107,12 +138,14 @@ public sealed class NPCCoverSystem : EntitySystem
                     continue;
                 if (Exists(owner))
                 {
+                    Debug($"RESERVE FAIL {ToPrettyString(npc)} cover={ToPrettyString(coverEnt)} reason=cover-owned-by {ToPrettyString(owner)}");
                     return false;
                 }
             }
         }
 
         _reservations[slot] = npc;
+        Debug($"RESERVE OK {ToPrettyString(npc)} slot={DescribeSlot(slot)}");
         return true;
     }
 
@@ -133,6 +166,7 @@ public sealed class NPCCoverSystem : EntitySystem
         if (!_xformQuery.TryGetComponent(npc, out var npcXform) ||
             !_xformQuery.TryGetComponent(enemy, out var enemyXform))
         {
+            Debug($"SELECT FAIL {ToPrettyString(npc)} vs {ToPrettyString(enemy)} reason=missing-xform");
             return false;
         }
 
@@ -140,6 +174,7 @@ public sealed class NPCCoverSystem : EntitySystem
         var enemyMap = _transform.GetMapCoordinates(enemy, xform: enemyXform);
         if (npcMap.MapId != enemyMap.MapId)
         {
+            Debug($"SELECT FAIL {ToPrettyString(npc)} vs {ToPrettyString(enemy)} reason=map-mismatch");
             return false;
         }
 
@@ -148,10 +183,22 @@ public sealed class NPCCoverSystem : EntitySystem
         EntityCoordinates bestApproach = default;
         CoverSlotId bestSlot = default;
         var bestScore = float.MinValue;
+        var scanned = 0;
+        var directionalOk = 0;
+        var tableOk = 0;
+        var skipInactive = 0;
+        var skipNoStand = 0;
+        var skipTaken = 0;
+        var skipFace = 0;
+
         foreach (var ent in _lookup.GetEntitiesInRange(npcMap, searchRange))
         {
             if (!_cover.IsCoverActive(ent))
+            {
+                if (_directionalQuery.HasComponent(ent) || _probQuery.HasComponent(ent))
+                    skipInactive++;
                 continue;
+            }
 
             if (!_xformQuery.TryGetComponent(ent, out var coverXform) || coverXform.GridUid is not { } gridUid)
                 continue;
@@ -159,30 +206,37 @@ public sealed class NPCCoverSystem : EntitySystem
             if (!TryComp(gridUid, out MapGridComponent? grid))
                 continue;
 
+            scanned++;
+
             if (_directionalQuery.HasComponent(ent))
             {
-                if (!TryGetDirectionalStand(ent, gridUid, grid, out var stand, out var coverSlot))
+                if (!TryGetDirectionalStand(ent, gridUid, grid, enemyMap, out var stand, out var coverSlot))
                 {
+                    skipNoStand++;
                     continue;
                 }
 
                 if (!IsSlotFree(coverSlot, npc))
                 {
+                    skipTaken++;
                     continue;
                 }
 
                 // Enemy must be on the attack face for the stand to be useful.
                 if (!_cover.ShouldDirectionalBlock(ent, enemyMap))
                 {
+                    skipFace++;
                     continue;
                 }
 
                 if (!TryGetDirectionalApproach(ent, gridUid, grid, npcMap, stand, out var approach))
                 {
+                    skipNoStand++;
                     continue;
                 }
 
                 var score = ScoreCandidate(npcMap, enemyMap, _transform.ToMapCoordinates(stand), approach);
+                directionalOk++;
 
                 if (score <= bestScore)
                     continue;
@@ -197,15 +251,18 @@ public sealed class NPCCoverSystem : EntitySystem
             {
                 if (!TryGetTableStand(ent, gridUid, grid, enemyMap, npc, out var stand, out var coverSlot))
                 {
+                    skipNoStand++;
                     continue;
                 }
 
                 if (!IsSlotFree(coverSlot, npc))
                 {
+                    skipTaken++;
                     continue;
                 }
 
                 var score = ScoreCandidate(npcMap, enemyMap, _transform.ToMapCoordinates(stand), stand);
+                tableOk++;
                 if (score <= bestScore)
                     continue;
 
@@ -219,6 +276,8 @@ public sealed class NPCCoverSystem : EntitySystem
 
         if (bestCover == null)
         {
+            Debug(
+                $"SELECT FAIL {ToPrettyString(npc)} vs {ToPrettyString(enemy)} range={searchRange:F1} scanned={scanned} dirOk={directionalOk} tableOk={tableOk} skipInactive={skipInactive} skipNoStand={skipNoStand} skipTaken={skipTaken} skipFace={skipFace}");
             return false;
         }
 
@@ -226,6 +285,8 @@ public sealed class NPCCoverSystem : EntitySystem
         standCoords = bestStand;
         approachCoords = bestApproach;
         slot = bestSlot;
+        Debug(
+            $"SELECT OK {ToPrettyString(npc)} vs {ToPrettyString(enemy)} cover={ToPrettyString(coverEntity)} stand={DescribeCoords(standCoords)} approach={DescribeCoords(approachCoords)} score={bestScore:F2} slot={DescribeSlot(slot)} scanned={scanned} dirOk={directionalOk} tableOk={tableOk}");
         return true;
     }
 
@@ -256,6 +317,7 @@ public sealed class NPCCoverSystem : EntitySystem
             HasShootLos(npc, enemy, currentDist + 0.5f))
         {
             holdCoords = npcXform.Coordinates;
+            Debug($"HOLD OK {ToPrettyString(npc)} stay-put dist={currentDist:F1}");
             return true;
         }
 
@@ -293,9 +355,13 @@ public sealed class NPCCoverSystem : EntitySystem
         }
 
         if (best == null)
+        {
+            Debug($"HOLD FAIL {ToPrettyString(npc)} vs {ToPrettyString(enemy)} preferred={preferredRange:F1}");
             return false;
+        }
 
         holdCoords = best.Value;
+        Debug($"HOLD OK {ToPrettyString(npc)} coords={DescribeCoords(holdCoords)} preferred={preferredRange:F1}");
         return true;
     }
 
@@ -322,7 +388,8 @@ public sealed class NPCCoverSystem : EntitySystem
 
     /// <summary>
     /// True when the NPC is holding the reserved cover stand.
-    /// Directional: must be on the cade tile (center). Tables: reserved adjacent tile.
+    /// Directional: opposite the attack face (rear / cade), never the face toward the enemy.
+    /// Tables: reserved adjacent tile.
     /// </summary>
     public bool IsInCoverPosition(EntityUid npc, EntityUid cover, EntityCoordinates stand, float range = CoverArriveRange)
     {
@@ -341,15 +408,19 @@ public sealed class NPCCoverSystem : EntitySystem
         if (_probQuery.HasComponent(cover) && !_directionalQuery.HasComponent(cover))
             return IsAtCoverStand(npc, stand, range);
 
-        var coverTile = _map.CoordinatesToTile(gridUid, grid, _transform.GetMoverCoordinates(cover, coverXform));
-        var npcTile = _map.CoordinatesToTile(gridUid, grid, npcXform.Coordinates);
-        var behind = _cover.GetDefenderApproachOffset(cover);
+        var npcMap = _transform.GetMapCoordinates(npc, xform: npcXform);
 
-        // Still on the attack-face tile — not in cover.
-        if (behind != Vector2i.Zero && npcTile == coverTile - behind)
+        // On the attack face (same side shots are blocked from) — not in cover.
+        if (_cover.ShouldDirectionalBlock(cover, npcMap))
             return false;
 
-        // Final position is the cade tile center.
+        var coverTile = _map.CoordinatesToTile(gridUid, grid, _transform.GetMoverCoordinates(cover, coverXform));
+        var npcTile = _map.CoordinatesToTile(gridUid, grid, npcXform.Coordinates);
+
+        // Rear stand tile, or on the cade itself after a vault.
+        if (npcTile == coverTile)
+            return true;
+
         return IsAtCoverStand(npc, stand, range);
     }
 
@@ -382,7 +453,7 @@ public sealed class NPCCoverSystem : EntitySystem
     }
 
     /// <summary>
-    /// True when the NPC is on the rear-adjacent defender tile.
+    /// True when the NPC is on the rear-adjacent defender tile (not the attack face).
     /// </summary>
     public bool IsOnDefenderApproach(EntityUid npc, EntityUid cover)
     {
@@ -394,13 +465,14 @@ public sealed class NPCCoverSystem : EntitySystem
         if (!TryComp(gridUid, out MapGridComponent? grid))
             return false;
 
-        var behind = _cover.GetDefenderApproachOffset(cover);
-        if (behind == Vector2i.Zero)
-            return false;
-
         var coverTile = _map.CoordinatesToTile(gridUid, grid, _transform.GetMoverCoordinates(cover, coverXform));
         var npcTile = _map.CoordinatesToTile(gridUid, grid, npcXform.Coordinates);
-        return npcTile == coverTile + behind;
+        var delta = npcTile - coverTile;
+        if (Math.Abs(delta.X) + Math.Abs(delta.Y) != 1)
+            return false;
+
+        var npcMap = _transform.GetMapCoordinates(npc, xform: npcXform);
+        return !_cover.ShouldDirectionalBlock(cover, npcMap);
     }
 
     public bool ShouldAbandonCover(EntityUid npc, EntityUid enemy, EntityUid coverEntity, float meleeRange)
@@ -438,41 +510,61 @@ public sealed class NPCCoverSystem : EntitySystem
         EntityUid cover,
         EntityUid gridUid,
         MapGridComponent grid,
+        MapCoordinates enemyMap,
         out EntityCoordinates stand,
         out CoverSlotId slot)
     {
         stand = default;
         slot = default;
 
-        // Final stand = center of the barricade tile. Approach = free rear tile.
-        var coverCoords = _transform.GetMoverCoordinates(cover);
+        if (!_xformQuery.TryGetComponent(cover, out var coverXform))
+            return false;
+
+        var coverCoords = _transform.GetMoverCoordinates(cover, coverXform);
         var coverTile = _map.CoordinatesToTile(gridUid, grid, coverCoords);
-        var behind = _cover.GetDefenderApproachOffset(cover);
-        if (behind == Vector2i.Zero)
+
+        // Pick the walkable orthogonal neighbour that is NOT on the attack face and is
+        // farthest from the enemy — that is the true defender side relative to the threat.
+        // Using only barricade rotation previously put NPCs on the face for some placements.
+        EntityCoordinates? bestStand = null;
+        Vector2i bestTile = default;
+        var bestDistSq = float.MinValue;
+
+        foreach (var offset in OrthogonalOffsets)
+        {
+            var candidateTile = coverTile + offset;
+            var tileRef = _map.GetTileRef(gridUid, grid, candidateTile);
+            if (tileRef.Tile.IsEmpty || _turf.IsTileBlocked(tileRef, CollisionGroup.Impassable))
+                continue;
+
+            var center = _map.GridTileToLocal(gridUid, grid, candidateTile);
+            var standMap = _transform.ToMapCoordinates(center);
+
+            // Attack-face tile — never stand here.
+            if (_cover.ShouldDirectionalBlock(cover, standMap))
+                continue;
+
+            var distSq = (standMap.Position - enemyMap.Position).LengthSquared();
+            if (distSq <= bestDistSq)
+                continue;
+
+            bestDistSq = distSq;
+            bestTile = candidateTile;
+            bestStand = new EntityCoordinates(center.EntityId,
+                center.Position + new Vector2(offset.X, offset.Y) * BarricadeStandNudge);
+        }
+
+        if (bestStand == null)
             return false;
 
-        var rearTile = coverTile + behind;
-        var cadeRef = _map.GetTileRef(gridUid, grid, coverTile);
-        if (cadeRef.Tile.IsEmpty)
-            return false;
-
-        if (_turf.IsTileBlocked(cadeRef, CollisionGroup.Impassable))
-            return false;
-
-        var rearRef = _map.GetTileRef(gridUid, grid, rearTile);
-        if (rearRef.Tile.IsEmpty)
-            return false;
-
-        if (_turf.IsTileBlocked(rearRef, CollisionGroup.Impassable))
-            return false;
-
-        stand = _map.GridTileToLocal(gridUid, grid, coverTile);
-        slot = new CoverSlotId(cover, gridUid, coverTile);
+        stand = bestStand.Value;
+        slot = new CoverSlotId(cover, gridUid, bestTile);
         return true;
     }
 
     /// <summary>
-    /// Always approach via the rear tile first, then MoveTo onto the cade center.
+    /// Approach equals the rear stand; pathfinding walks around the face when needed.
+    /// Climb only kicks in if MoveTo gets stuck rubbing against the cade.
     /// </summary>
     private bool TryGetDirectionalApproach(
         EntityUid cover,
@@ -483,25 +575,6 @@ public sealed class NPCCoverSystem : EntitySystem
         out EntityCoordinates approach)
     {
         approach = stand;
-
-        var coverCoords = _transform.GetMoverCoordinates(cover);
-        var coverTile = _map.CoordinatesToTile(gridUid, grid, coverCoords);
-        var npcTile = _map.WorldToTile(gridUid, grid, npcMap.Position);
-        var behind = _cover.GetDefenderApproachOffset(cover);
-        if (behind == Vector2i.Zero)
-            return false;
-
-        var rearTile = coverTile + behind;
-        var rear = _map.GridTileToLocal(gridUid, grid, rearTile);
-
-        // Already on rear or on the cade — first MoveTo can finish immediately / go to stand.
-        if (npcTile == rearTile || npcTile == coverTile)
-        {
-            approach = rear;
-            return true;
-        }
-
-        approach = rear;
         return true;
     }
 
@@ -569,6 +642,18 @@ public sealed class NPCCoverSystem : EntitySystem
         stand = best.Value;
         slot = bestSlot;
         return true;
+    }
+
+    private string DescribeSlot(CoverSlotId slot)
+    {
+        var cover = slot.CoverEntity is { } c ? ToPrettyString(c) : "none";
+        return $"{cover}@{slot.Tile}";
+    }
+
+    private string DescribeCoords(EntityCoordinates coords)
+    {
+        var map = _transform.ToMapCoordinates(coords);
+        return $"({map.Position.X:F1},{map.Position.Y:F1}) map={map.MapId}";
     }
 
     private static readonly Vector2i[] OrthogonalOffsets =

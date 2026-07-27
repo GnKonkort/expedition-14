@@ -1,6 +1,7 @@
 using System.Linq;
 using System.Numerics;
 using Content.Server.Cargo.Systems;
+using Content.Server.NPC.Systems;
 using Content.Server.Weapons.Ranged.Components;
 using Content.Shared.Cargo;
 using Content.Shared.Cover;
@@ -39,6 +40,7 @@ public sealed partial class GunSystem : SharedGunSystem
     [Dependency] private readonly SharedContainerSystem _container = default!;
     [Dependency] private readonly SharedMapSystem _map = default!;
     [Dependency] private readonly SharedCoverSystem _cover = default!;
+    [Dependency] private readonly NPCSquadSystem _squads = default!;
 
     private const float DamagePitchVariation = 0.05f;
 
@@ -195,6 +197,10 @@ public sealed partial class GunSystem : SharedGunSystem
                                     {
                                         continue;
                                     }
+
+                                    // Same-squad allies do not block or take hitscan damage.
+                                    if (_squads.AreSameSquad(lastUser, collide.HitEntity))
+                                        continue;
 
                                     // Soft cover: may pass depending on side / chance.
                                     // Entropy must vary per shot — gunUid alone is stable and made the roll permanent.

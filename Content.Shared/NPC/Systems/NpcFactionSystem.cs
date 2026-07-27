@@ -228,6 +228,17 @@ public sealed partial class NpcFactionSystem : EntitySystem
         return ent.Comp.Factions.Overlaps(other.Comp.Factions) || ent.Comp.FriendlyFactions.Overlaps(other.Comp.Factions);
     }
 
+    /// <summary>
+    /// True when both entities share at least one faction prototype (strict same-faction, not FriendlyFactions).
+    /// </summary>
+    public bool ShareFaction(Entity<NpcFactionMemberComponent?> ent, Entity<NpcFactionMemberComponent?> other)
+    {
+        if (!Resolve(ent, ref ent.Comp, false) || !Resolve(other, ref other.Comp, false))
+            return false;
+
+        return ent.Comp.Factions.Overlaps(other.Comp.Factions);
+    }
+
     public bool IsFactionFriendly([ForbidLiteral] string target, [ForbidLiteral] string with)
     {
         return _factions[target].Friendly.Contains(with) && _factions[with].Friendly.Contains(target);

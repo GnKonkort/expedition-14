@@ -59,6 +59,7 @@ public sealed class NPCUtilitySystem : EntitySystem
     [Dependency] private readonly MobThresholdSystem _thresholdSystem = default!;
     [Dependency] private readonly TurretTargetSettingsSystem _turretTargetSettings = default!;
     [Dependency] private readonly NPCGunAmmoSystem _gunAmmo = default!;
+    [Dependency] private readonly NPCGrenadeSystem _grenades = default!;
 
     private EntityQuery<PuddleComponent> _puddleQuery;
     private EntityQuery<TransformComponent> _xformQuery;
@@ -562,6 +563,11 @@ public sealed class NPCUtilitySystem : EntitySystem
                     break;
 
                 _gunAmmo.CollectNearbyAlternateLoadouts(owner, gunUid, _gunAmmo.GetAmmoSearchRange(blackboard), entities);
+                break;
+            }
+            case NearbyGrenadesQuery:
+            {
+                _grenades.CollectNearbyGrenades(owner, vision, entities);
                 break;
             }
             default:

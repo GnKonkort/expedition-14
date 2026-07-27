@@ -4,6 +4,7 @@ using Content.Server.Examine;
 using Content.Server.NPC.Components;
 using Content.Server.NPC.Pathfinding;
 using Content.Shared.Climbing;
+using Content.Shared.DoAfter;
 using Content.Shared.Interaction;
 using Content.Shared.Movement.Components;
 using Content.Shared.NPC;
@@ -101,6 +102,25 @@ public sealed partial class NPCSteeringSystem
         var destinationCoordinates = steering.Coordinates;
         var inLos = true;
 
+        // Vault / climb slide in progress — MUST stand still or BreakOnMove cancels the bar.
+        if (TryComp<ClimbingComponent>(uid, out var climbingBusy) &&
+            (climbingBusy.DoAfter != null || climbingBusy.NextTransition != null))
+        {
+            ClimbDebug(uid,
+                $"HOLD climb-busy doAfter={climbingBusy.DoAfter != null} transition={climbingBusy.NextTransition != null} isClimbing={climbingBusy.IsClimbing} vel={body.LinearVelocity.Length():F2}");
+            HoldStillForClimb(uid, mover, steering, interest);
+            return true;
+        }
+
+        // Active obstacle do_after (climb/pry) tracked on steering.
+        if (steering.DoAfterId != null &&
+            _doAfter.GetStatus(steering.DoAfterId) == DoAfterStatus.Running)
+        {
+            ClimbDebug(uid, $"HOLD steering-doAfter running id={steering.DoAfterId}");
+            HoldStillForClimb(uid, mover, steering, interest);
+            return true;
+        }
+
         // Check if we're in LOS if that's required.
         // TODO: Need something uhh better not sure on the interaction between these.
         if (!steering.ForceMove && steering.ArriveOnLineOfSight)
@@ -192,6 +212,12 @@ public sealed partial class NPCSteeringSystem
         {
             arrived = node.Box.Contains(ourCoordinates.Position);
         }
+        // Climbables: only handle when adjacent (one tile), not InteractionRange away.
+        else if (steering.CurrentPath.TryPeek(out var climbNode) &&
+                 (climbNode.Data.Flags & PathfindingBreadcrumbFlag.Climb) != 0x0)
+        {
+            arrived = direction.Length() <= ClimbVaultMaxRange;
+        }
         // Try getting into blocked range I guess?
         // TODO: Consider melee range or the likes.
         else
@@ -212,13 +238,26 @@ public sealed partial class NPCSteeringSystem
                 // Breaking behaviours and the likes.
                 lock (_obstacles)
                 {
-                    // We're still coming to a stop so wait for the do_after.
+                    var isClimbNode = (node.Data.Flags & PathfindingBreadcrumbFlag.Climb) != 0x0;
+
+                    // Must come to a full stop before vault — seeking while "waiting" caused run-loops
+                    // and BreakOnMove cancelled the progress bar.
                     if (body.LinearVelocity.LengthSquared() > 0.01f)
                     {
+                        if (isClimbNode)
+                        {
+                            ClimbDebug(uid,
+                                $"WAIT-STOP climb-node vel={body.LinearVelocity.Length():F2} dist={direction.Length():F2} flags={steering.Flags}");
+                            HoldStillForClimb(uid, mover, steering, interest);
+                        }
+
                         return true;
                     }
 
+                    ClimbDebug(uid,
+                        $"HANDLE obstacle climb={isClimbNode} door={(node.Data.Flags & PathfindingBreadcrumbFlag.Door) != 0} ents-pending flags={steering.Flags} pathLeft={steering.CurrentPath.Count}");
                     status = TryHandleFlags(uid, steering, node);
+                    ClimbDebug(uid, $"HANDLE result={status} doAfter={steering.DoAfterId != null}");
                 }
 
                 // TODO: Need to handle re-pathing in case the target moves around.
@@ -226,14 +265,18 @@ public sealed partial class NPCSteeringSystem
                 {
                     case SteeringObstacleStatus.Completed:
                         steering.DoAfterId = null;
+                        ClimbDebug(uid, "OBSTACLE completed → dequeue");
                         break;
                     case SteeringObstacleStatus.Failed:
                         steering.DoAfterId = null;
+                        ClimbDebug(uid, "OBSTACLE failed → NoPath");
                         // TODO: Blacklist the poly for next query
                         steering.Status = SteeringStatus.NoPath;
                         return false;
                     case SteeringObstacleStatus.Continuing:
-                        CheckPath(uid, steering, xform, needsPath, targetDistance);
+                        // Stand still during vault/pry do_after. Do NOT CheckPath — repath mid-vault loops.
+                        ClimbDebug(uid, "OBSTACLE continuing → hold still (no repath)");
+                        HoldStillForClimb(uid, mover, steering, interest);
                         return true;
                     default:
                         throw new ArgumentOutOfRangeException();
@@ -289,16 +332,32 @@ public sealed partial class NPCSteeringSystem
 
             if (stuckTime.TotalSeconds > maxStuckTime)
             {
+                // Barricade / table in the way — vault instead of giving up on the route.
+                lock (_obstacles)
+                {
+                    ClimbDebug(uid, $"STUCK t={stuckTime.TotalSeconds:F1}s → try vault");
+                    if (TryVaultNearbyClimbable(uid, steering))
+                    {
+                        ClimbDebug(uid, "STUCK vault-started → hold still");
+                        HoldStillForClimb(uid, mover, steering, interest);
+                        ResetStuck(steering, ourCoordinates);
+                        return true;
+                    }
+                }
+
                 // TODO: Blacklist nodes (pathfinder factor wehn)
                 // TODO: This should be a warning but
                 // A) NPCs get stuck on non-anchored static bodies still (e.g. closets)
                 // B) NPCs still try to move in locked containers (e.g. cow, hamster)
                 // and I don't want to spam grafana even harder than it gets spammed rn.
                 Log.Debug($"NPC {ToPrettyString(uid)} found stuck at {ourCoordinates}");
+                ClimbDebug(uid, $"STUCK vault-miss → repath Climbing flags was={steering.Flags}");
+                steering.Flags |= PathFlags.Climbing;
                 needsPath = true;
 
                 if (stuckTime.TotalSeconds > maxStuckTime * 3)
                 {
+                    ClimbDebug(uid, "STUCK timeout → NoPath");
                     steering.Status = SteeringStatus.NoPath;
                     return false;
                 }
@@ -356,6 +415,25 @@ public sealed partial class NPCSteeringSystem
     {
         component.LastStuckCoordinates = ourCoordinates;
         component.LastStuckTime = _timing.CurTime;
+    }
+
+    /// <summary>
+    /// Zero movement input so climb DoAfter (BreakOnMove) is not cancelled.
+    /// </summary>
+    private void HoldStillForClimb(
+        EntityUid uid,
+        InputMoverComponent mover,
+        NPCSteeringComponent steering,
+        Span<float> interest)
+    {
+        steering.ForceMove = false;
+        for (var i = 0; i < interest.Length; i++)
+            interest[i] = 0f;
+
+        Array.Clear(steering.Interest);
+        Array.Clear(steering.Danger);
+        steering.LastSteerDirection = Vector2.Zero;
+        SetDirection(uid, mover, steering, Vector2.Zero, clear: false);
     }
 
     private void CheckPath(EntityUid uid, NPCSteeringComponent steering, TransformComponent xform, bool needsPath, float targetDistance)
