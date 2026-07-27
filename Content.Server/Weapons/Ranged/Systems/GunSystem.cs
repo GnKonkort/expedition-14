@@ -3,10 +3,12 @@ using System.Numerics;
 using Content.Server.Cargo.Systems;
 using Content.Server.Weapons.Ranged.Components;
 using Content.Shared.Cargo;
+using Content.Shared.Cover;
 using Content.Shared.Damage;
 using Content.Shared.Damage.Systems;
 using Content.Shared.Database;
 using Content.Shared.Effects;
+using Content.Shared.Physics;
 using Content.Shared.Projectiles;
 using Content.Shared.Weapons.Melee;
 using Content.Shared.Weapons.Ranged;
@@ -36,6 +38,7 @@ public sealed partial class GunSystem : SharedGunSystem
     [Dependency] private readonly SharedStaminaSystem _stamina = default!;
     [Dependency] private readonly SharedContainerSystem _container = default!;
     [Dependency] private readonly SharedMapSystem _map = default!;
+    [Dependency] private readonly SharedCoverSystem _cover = default!;
 
     private const float DamagePitchVariation = 0.05f;
 
@@ -171,18 +174,20 @@ public sealed partial class GunSystem : SharedGunSystem
                     {
                         for (var reflectAttempt = 0; reflectAttempt < 3; reflectAttempt++)
                         {
-                            var ray = new CollisionRay(from.Position, dir, hitscan.CollisionMask);
+                            // Include BulletImpassable so soft cover (tables / metal cades) can stop beams.
+                            var mask = hitscan.CollisionMask | (int)CollisionGroup.BulletImpassable;
+                            var ray = new CollisionRay(from.Position, dir, mask);
                             var rayCastResults =
                                 Physics.IntersectRay(from.MapId, ray, hitscan.MaxLength, lastUser, false).ToList();
                             if (!rayCastResults.Any())
                                 break;
 
-                            var result = rayCastResults[0];
+                            var shotOrigin = new MapCoordinates(from.Position, from.MapId);
+                            RayCastResults? result = null;
 
                             // Check if laser is shot from in a container
                             if (!_container.IsEntityOrParentInContainer(lastUser))
                             {
-                                // Checks if the laser should pass over unless targeted by its user
                                 foreach (var collide in rayCastResults)
                                 {
                                     if (collide.HitEntity != gun.Target &&
@@ -191,15 +196,31 @@ public sealed partial class GunSystem : SharedGunSystem
                                         continue;
                                     }
 
+                                    // Soft cover: may pass depending on side / chance.
+                                    if (_cover.IsCoverActive(collide.HitEntity) &&
+                                        (HasComp<DirectionalCoverComponent>(collide.HitEntity) ||
+                                         HasComp<ProbabilisticCoverComponent>(collide.HitEntity)))
+                                    {
+                                        if (!_cover.ShouldBlockShot(collide.HitEntity, shotOrigin, seedEntity: gunUid, shooter: lastUser))
+                                            continue;
+                                    }
+
                                     result = collide;
                                     break;
                                 }
                             }
+                            else if (rayCastResults.Count > 0)
+                            {
+                                result = rayCastResults[0];
+                            }
 
-                            var hit = result.HitEntity;
+                            if (result == null)
+                                break;
+
+                            var hit = result.Value.HitEntity;
                             lastHit = hit;
 
-                            FireEffects(fromEffect, result.Distance, dir.Normalized().ToAngle(), hitscan, hit);
+                            FireEffects(fromEffect, result.Value.Distance, dir.Normalized().ToAngle(), hitscan, hit);
 
                             var ev = new HitScanReflectAttemptEvent(user, gunUid, hitscan.Reflective, dir, false);
                             RaiseLocalEvent(hit, ref ev);

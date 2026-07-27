@@ -21,6 +21,10 @@
         - TableMask
         layer:
         - TableLayer
+        - BulletImpassable
+  - type: ProbabilisticCover
+    adjacentPassRange: 1
+    blockChance: 0.5
   - type: SpriteFade
   - type: Sprite
   - type: Icon
@@ -58,3 +62,4 @@
         - TableMask
         layer:
         - TableLayer
+        - BulletImpassable

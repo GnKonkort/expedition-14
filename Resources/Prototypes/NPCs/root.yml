@@ -82,6 +82,12 @@
 - type: htnCompound
   id: SimpleHumanoidHostileCompound
   branches:
+    # In melee with no usable cover: sometimes close for melee instead of kiting.
+    - preconditions:
+        - !type:PreferCloseMeleePrecondition
+      tasks:
+        - !type:HTNCompoundTask
+          task: MeleeCombatCompound
     - tasks:
         - !type:HTNCompoundTask
           task: RangedCombatCompound

@@ -69,4 +69,10 @@ public sealed partial class NPCRangedCombatComponent : Component
     [ViewVariables(VVAccess.ReadWrite)]
     public float MissChance = 0.25f;
     // End Frontier
+
+    /// <summary>
+    /// When true, do not ForceMove toward the target on lost LOS (e.g. holding soft cover).
+    /// </summary>
+    [ViewVariables(VVAccess.ReadWrite)]
+    public bool StayPut;
 }

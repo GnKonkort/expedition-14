@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Content.Server.NPC.Components;
 using Content.Server.NPC.Pathfinding;
 using Content.Server.NPC.Systems;
+using Content.Shared.Cover;
 using Robust.Shared.Map;
 using Robust.Shared.Map.Components;
 using Robust.Shared.Physics.Components;
@@ -18,6 +19,7 @@ public sealed partial class MoveToOperator : HTNOperator, IHtnConditionalShutdow
     private NPCSteeringSystem _steering = default!;
     private PathfindingSystem _pathfind = default!;
     private SharedTransformSystem _transform = default!;
+    private SharedCoverSystem _sharedCover = default!;
 
     /// <summary>
     /// When to shut the task down.
@@ -69,6 +71,7 @@ public sealed partial class MoveToOperator : HTNOperator, IHtnConditionalShutdow
         _pathfind = sysManager.GetEntitySystem<PathfindingSystem>();
         _steering = sysManager.GetEntitySystem<NPCSteeringSystem>();
         _transform = sysManager.GetEntitySystem<SharedTransformSystem>();
+        _sharedCover = sysManager.GetEntitySystem<SharedCoverSystem>();
     }
 
     public override async Task<(bool Valid, Dictionary<string, object>? Effects)> Plan(NPCBlackboard blackboard,
@@ -174,6 +177,30 @@ public sealed partial class MoveToOperator : HTNOperator, IHtnConditionalShutdow
         if (ShutdownState == HTNPlanState.PlanFinished && steering.Status == SteeringStatus.Moving)
         {
             return HTNOperatorStatus.Finished;
+        }
+
+        if (blackboard.TryGetValue<EntityUid>(NPCCoverSystem.CoverEntityKey, out var coverEnt, _entManager))
+        {
+            var coverSys = _entManager.System<NPCCoverSystem>();
+            var onFace = _sharedCover.ShouldDirectionalBlock(coverEnt, _transform.GetMapCoordinates(owner));
+
+            // Do not grind the face fixture — fail cover seek unless climbing is enabled.
+            if (_entManager.HasComponent<DirectionalCoverComponent>(coverEnt) &&
+                onFace &&
+                steering.Status == SteeringStatus.NoPath &&
+                !blackboard.GetValueOrDefault<bool>(NPCBlackboard.NavClimb, _entManager))
+                return HTNOperatorStatus.Failed;
+
+            // Distance arrival alone accepts the neighboring flank; require the target tile.
+            if (steering.Status == SteeringStatus.InRange &&
+                blackboard.TryGetValue<EntityCoordinates>(TargetKey, out var coverTarget, _entManager) &&
+                !coverSys.IsAtCoverStand(owner, coverTarget))
+            {
+                steering.Range = System.Math.Min(steering.Range, 0.2f);
+                steering.Status = SteeringStatus.Moving;
+                steering.ForceMove = true;
+                return HTNOperatorStatus.Continuing;
+            }
         }
 
         return steering.Status switch

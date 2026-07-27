@@ -18,6 +18,8 @@
         layer:
         - TableLayer
         - LowImpassable # no mice or crawling chuds allowed, its flush with the floor
+        - BulletImpassable
+  - type: DirectionalCover
   - type: RotationDrawDepth
     southDrawDepth: OverMobs
   - type: Anchorable

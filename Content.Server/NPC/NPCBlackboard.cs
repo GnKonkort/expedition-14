@@ -30,7 +30,10 @@ public sealed partial class NPCBlackboard : IEnumerable<KeyValuePair<string, obj
         {"MinimumIdleTime", 2f},
         {"MovementRangeClose", 0.2f},
         {"MovementRange", 1.5f},
+        // Tight enough to reach the hugged stand point without finishing from tile edge.
+        {"CoverMovementRange", 0.25f},
         {"RangedRange", 10f},
+        {"PreferredRangedRange", 8f},
         {"RotateSpeed", float.MaxValue},
         {"VisionRadius", 10f},
         {"AggroVisionRadius", 10f},
@@ -297,6 +300,7 @@ public sealed partial class NPCBlackboard : IEnumerable<KeyValuePair<string, obj
 
     public const string MeleeMissChance = "MeleeMissChance";
 
+    public const string PreferredRangedRange = "PreferredRangedRange";
     public const string Owner = "Owner";
     public const string OwnerCoordinates = "OwnerCoordinates";
     public const string MovementTarget = "MovementTarget";

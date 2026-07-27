@@ -6,6 +6,7 @@ using Content.Shared.CombatMode;
 using Content.Shared.Mobs;
 using Content.Shared.Mobs.Components;
 using Robust.Shared.Audio;
+using Robust.Shared.Map;
 
 namespace Content.Server.NPC.HTN.PrimitiveTasks.Operators.Combat.Ranged;
 
@@ -40,7 +41,20 @@ public sealed partial class GunOperator : HTNOperator, IHtnConditionalShutdown
     [DataField("opaqueKey")]
     public bool UseOpaqueForLOSChecks = false;
 
-    // Like movement we add a component and pass it off to the dedicated system.
+    /// <summary>
+    /// Hold soft cover: stand still until the enemy enters melee range or the cover is destroyed.
+    /// </summary>
+    [DataField]
+    public bool HoldCover;
+
+    [DataField]
+    public string CoverEntityKey = NPCCoverSystem.CoverEntityKey;
+
+    [DataField]
+    public string CoverCoordinatesKey = NPCCoverSystem.CoverCoordinatesKey;
+
+    [DataField]
+    public string MeleeRangeKey = "MeleeRange";
 
     public override async Task<(bool Valid, Dictionary<string, object>? Effects)> Plan(NPCBlackboard blackboard,
         CancellationToken cancelToken)
@@ -78,6 +92,7 @@ public sealed partial class GunOperator : HTNOperator, IHtnConditionalShutdown
         var ranged = _entManager.EnsureComponent<NPCRangedCombatComponent>(owner);
         ranged.Target = blackboard.GetValue<EntityUid>(TargetKey);
         ranged.UseOpaqueForLOSChecks = UseOpaqueForLOSChecks;
+        ranged.StayPut = HoldCover;
 
         if (blackboard.TryGetValue<float>(NPCBlackboard.RotateSpeed, out var rotSpeed, _entManager))
         {
@@ -108,10 +123,15 @@ public sealed partial class GunOperator : HTNOperator, IHtnConditionalShutdown
             blackboard.TryGetValue<EntityUid>(TargetKey, out var target, _entManager))
         {
             combat.Target = target;
+            combat.StayPut = HoldCover;
             _entManager.System<NPCGunAmmoSystem>().NoteCombatActivity(blackboard);
 
+            if (HoldCover && ShouldLeaveCover(blackboard, owner, target))
+            {
+                status = HTNOperatorStatus.Failed;
+            }
             // Success
-            if (_entManager.TryGetComponent<MobStateComponent>(combat.Target, out var mobState) &&
+            else if (_entManager.TryGetComponent<MobStateComponent>(combat.Target, out var mobState) &&
                 mobState.CurrentState > TargetState)
             {
                 status = HTNOperatorStatus.Finished;
@@ -150,5 +170,27 @@ public sealed partial class GunOperator : HTNOperator, IHtnConditionalShutdown
         }
 
         return status;
+    }
+
+    private bool ShouldLeaveCover(NPCBlackboard blackboard, EntityUid owner, EntityUid target)
+    {
+        var coverSys = _entManager.System<NPCCoverSystem>();
+
+        if (!blackboard.TryGetValue<EntityUid>(CoverEntityKey, out var cover, _entManager))
+            return true;
+
+        var meleeRange = blackboard.GetValueOrDefault<float>(MeleeRangeKey, _entManager);
+        if (meleeRange <= 0f)
+            meleeRange = 1f;
+
+        if (coverSys.ShouldAbandonCover(owner, target, cover, meleeRange))
+            return true;
+
+        // Drifted off cover (face side / far from stand) — replan.
+        if (blackboard.TryGetValue<EntityCoordinates>(CoverCoordinatesKey, out var stand, _entManager) &&
+            !coverSys.IsInCoverPosition(owner, cover, stand))
+            return true;
+
+        return false;
     }
 }

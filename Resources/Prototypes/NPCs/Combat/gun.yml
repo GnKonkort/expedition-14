@@ -1,8 +1,190 @@
+# Tries to shoot a target at range: seek cover → hold 6–10 tiles → legacy adjacent juke.
+# Barricades: rear tile → climb onto cade center. From FACE: climb over first, then rear → cade.
+- type: htnCompound
+  id: SeekCoverCompound
+  branches:
+    # From the attack face: climb/path over to rear, then onto cade center.
+    - preconditions:
+        - !type:OnDirectionalCoverFacePrecondition
+      tasks:
+        - !type:HTNPrimitiveTask
+          operator: !type:PickCoverOperator
+
+        - !type:HTNPrimitiveTask
+          operator: !type:SetBoolOperator
+            targetKey: NavClimb
+            value: true
+
+        # Vault immediately when already adjacent to the cade.
+        - !type:HTNPrimitiveTask
+          operator: !type:ClimbCoverOperator
+
+        - !type:HTNPrimitiveTask
+          operator: !type:SetCoverRearTargetOperator
+
+        - !type:HTNPrimitiveTask
+          applyEffectsOnStartup: false
+          operator: !type:MoveToOperator
+            pathfindInPlanning: true
+            removeKeyOnFinish: false
+            targetKey: TargetCoordinates
+            pathfindKey: TargetPathfind
+            rangeKey: CoverMovementRange
+
+        - !type:HTNPrimitiveTask
+          operator: !type:SetCoverStandTargetOperator
+
+        - !type:HTNPrimitiveTask
+          applyEffectsOnStartup: false
+          operator: !type:MoveToOperator
+            pathfindInPlanning: true
+            removeKeyOnFinish: false
+            targetKey: TargetCoordinates
+            pathfindKey: TargetPathfind
+            rangeKey: CoverMovementRange
+
+        - !type:HTNPrimitiveTask
+          operator: !type:SetBoolOperator
+            targetKey: NavClimb
+            value: false
+
+        - !type:HTNPrimitiveTask
+          preconditions:
+            - !type:KeyExistsPrecondition
+              key: Target
+          operator: !type:GunOperator
+            targetKey: Target
+            holdCover: true
+          services:
+            - !type:UtilityService
+              id: RangedService
+              proto: NearbyGunTargets
+              key: Target
+
+    # Default: walk to rear tile, then climb onto cade center (tables: approach == stand).
+    - tasks:
+        - !type:HTNPrimitiveTask
+          operator: !type:PickCoverOperator
+
+        - !type:HTNPrimitiveTask
+          operator: !type:MoveToOperator
+            pathfindInPlanning: true
+            removeKeyOnFinish: false
+            targetKey: TargetCoordinates
+            pathfindKey: TargetPathfind
+            rangeKey: CoverMovementRange
+
+        - !type:HTNPrimitiveTask
+          operator: !type:SetBoolOperator
+            targetKey: NavClimb
+            value: true
+
+        - !type:HTNPrimitiveTask
+          operator: !type:SetCoverStandTargetOperator
+
+        - !type:HTNPrimitiveTask
+          applyEffectsOnStartup: false
+          operator: !type:MoveToOperator
+            pathfindInPlanning: true
+            removeKeyOnFinish: false
+            targetKey: TargetCoordinates
+            pathfindKey: TargetPathfind
+            rangeKey: CoverMovementRange
+
+        - !type:HTNPrimitiveTask
+          operator: !type:SetBoolOperator
+            targetKey: NavClimb
+            value: false
+
+        - !type:HTNPrimitiveTask
+          preconditions:
+            - !type:KeyExistsPrecondition
+              key: Target
+          operator: !type:GunOperator
+            targetKey: Target
+            holdCover: true
+          services:
+            - !type:UtilityService
+              id: RangedService
+              proto: NearbyGunTargets
+              key: Target
+
+- type: htnCompound
+  id: HoldRangeCompound
+  branches:
+    - tasks:
+        - !type:HTNPrimitiveTask
+          operator: !type:PickHoldRangeOperator
+
+        - !type:HTNPrimitiveTask
+          operator: !type:MoveToOperator
+            shutdownState: PlanFinished
+            pathfindInPlanning: true
+            removeKeyOnFinish: false
+            targetKey: TargetCoordinates
+            pathfindKey: TargetPathfind
+            rangeKey: MovementRangeClose
+
+        - !type:HTNPrimitiveTask
+          preconditions:
+            - !type:KeyExistsPrecondition
+              key: Target
+          operator: !type:GunOperator
+            targetKey: Target
+          services:
+            - !type:UtilityService
+              id: RangedService
+              proto: NearbyGunTargets
+              key: Target
+
+- type: htnCompound
+  id: LegacyGunJukeCompound
+  branches:
+    - tasks:
+        - !type:HTNPrimitiveTask
+          operator: !type:MoveToOperator
+            shutdownState: PlanFinished
+            pathfindInPlanning: true
+            removeKeyOnFinish: false
+            targetKey: TargetCoordinates
+            pathfindKey: TargetPathfind
+            stopOnLineOfSight: true
+            rangeKey: MeleeRange
+
+        - !type:HTNPrimitiveTask
+          operator: !type:JukeOperator
+            jukeType: AdjacentTile
+
+        - !type:HTNPrimitiveTask
+          preconditions:
+            - !type:KeyExistsPrecondition
+              key: Target
+          operator: !type:GunOperator
+            targetKey: Target
+          services:
+            - !type:UtilityService
+              id: RangedService
+              proto: NearbyGunTargets
+              key: Target
+
+- type: htnCompound
+  id: RangedEngageCompound
+  branches:
+    - tasks:
+        - !type:HTNCompoundTask
+          task: SeekCoverCompound
+    - tasks:
+        - !type:HTNCompoundTask
+          task: HoldRangeCompound
+    - tasks:
+        - !type:HTNCompoundTask
+          task: LegacyGunJukeCompound
+
 # Tries to shoot a target at range.
 - type: htnCompound
   id: GunCombatCompound
   branches:
-    # Draw stowed gun, pick target, move into range, then shoot.
+    # Draw stowed gun, pick target, then engage (cover → hold range → juke).
     - tasks:
         - !type:HTNPrimitiveTask
           preconditions:
@@ -15,31 +197,8 @@
           operator: !type:UtilityOperator
             proto: NearbyGunTargets
 
-        - !type:HTNPrimitiveTask
-          operator: !type:MoveToOperator
-            shutdownState: PlanFinished
-            pathfindInPlanning: true
-            removeKeyOnFinish: false
-            targetKey: TargetCoordinates
-            pathfindKey: TargetPathfind
-            stopOnLineOfSight: true
-            rangeKey: MeleeRange
-
-        - !type:HTNPrimitiveTask
-          operator: !type:JukeOperator
-            jukeType: AdjacentTile
-
-        - !type:HTNPrimitiveTask
-          preconditions:
-            - !type:KeyExistsPrecondition
-              key: Target
-          operator: !type:GunOperator
-            targetKey: Target
-          services:
-            - !type:UtilityService
-              id: RangedService
-              proto: NearbyGunTargets
-              key: Target
+        - !type:HTNCompoundTask
+          task: RangedEngageCompound
 
     # Already holding the gun — same fight loop without a draw step.
     - tasks:
@@ -49,31 +208,8 @@
           operator: !type:UtilityOperator
             proto: NearbyGunTargets
 
-        - !type:HTNPrimitiveTask
-          operator: !type:MoveToOperator
-            shutdownState: PlanFinished
-            pathfindInPlanning: true
-            removeKeyOnFinish: false
-            targetKey: TargetCoordinates
-            pathfindKey: TargetPathfind
-            stopOnLineOfSight: true
-            rangeKey: MeleeRange
-
-        - !type:HTNPrimitiveTask
-          operator: !type:JukeOperator
-            jukeType: AdjacentTile
-
-        - !type:HTNPrimitiveTask
-          preconditions:
-            - !type:KeyExistsPrecondition
-              key: Target
-          operator: !type:GunOperator
-            targetKey: Target
-          services:
-            - !type:UtilityService
-              id: RangedService
-              proto: NearbyGunTargets
-              key: Target
+        - !type:HTNCompoundTask
+          task: RangedEngageCompound
 
 # Selects compatible ammo in range, then moves to it and picks it up (reload is attempted in the pickup Update).
 - type: htnCompound

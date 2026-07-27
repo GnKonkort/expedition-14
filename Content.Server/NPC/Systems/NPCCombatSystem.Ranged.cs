@@ -70,7 +70,9 @@ public sealed partial class NPCCombatSystem
             if (comp.Status == CombatStatus.Unspecified)
                 continue;
 
-            if (_steeringQuery.TryGetComponent(uid, out var steering) && steering.Status == SteeringStatus.NoPath)
+            if (!comp.StayPut &&
+                _steeringQuery.TryGetComponent(uid, out var steering) &&
+                steering.Status == SteeringStatus.NoPath)
             {
                 comp.Status = CombatStatus.TargetUnreachable;
                 comp.ShootAccumulator = 0f;
@@ -155,9 +157,10 @@ public sealed partial class NPCCombatSystem
                 comp.ShootAccumulator = 0f;
                 comp.Status = CombatStatus.NotInSight;
 
-                if (TryComp(uid, out steering))
+                // Holding cover: stay put instead of twitching toward the target.
+                if (!comp.StayPut && _steeringQuery.TryGetComponent(uid, out var moveSteering))
                 {
-                    steering.ForceMove = true;
+                    moveSteering.ForceMove = true;
                 }
 
                 continue;
