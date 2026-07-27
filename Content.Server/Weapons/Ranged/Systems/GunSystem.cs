@@ -197,11 +197,16 @@ public sealed partial class GunSystem : SharedGunSystem
                                     }
 
                                     // Soft cover: may pass depending on side / chance.
+                                    // Entropy must vary per shot — gunUid alone is stable and made the roll permanent.
                                     if (_cover.IsCoverActive(collide.HitEntity) &&
                                         (HasComp<DirectionalCoverComponent>(collide.HitEntity) ||
                                          HasComp<ProbabilisticCoverComponent>(collide.HitEntity)))
                                     {
-                                        if (!_cover.ShouldBlockShot(collide.HitEntity, shotOrigin, seedEntity: gunUid, shooter: lastUser))
+                                        var entropy = HashCode.Combine(
+                                            Timing.CurTick.Value,
+                                            from.Position.GetHashCode(),
+                                            dir.GetHashCode());
+                                        if (!_cover.ShouldBlockShot(collide.HitEntity, shotOrigin, seedEntity: gunUid, shooter: lastUser, entropy: entropy))
                                             continue;
                                     }
 

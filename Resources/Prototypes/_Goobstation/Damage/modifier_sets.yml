@@ -286,14 +286,15 @@
     Heat: 20
     Structural: 30
 
-# Barricades
+# Barricades — soft cover absorbs hits; Piercing/Heat take 60% less (coeff 0.4).
 
 - type: damageModifierSet
   id: BarricadeSteel
   coefficients:
     Blunt: 0.9
     Slash: 0.9
-    Piercing: 0.9
+    Piercing: 0.4
+    Heat: 0.4
   flatReductions:
     Blunt: 5
     Slash: 5
@@ -303,6 +304,9 @@
 
 - type: damageModifierSet
   id: BarricadeSteelFolding
+  coefficients:
+    Piercing: 0.4
+    Heat: 0.4
   flatReductions:
     Blunt: 5
     Slash: 5
@@ -314,9 +318,9 @@
   coefficients:
     Blunt: 0.7
     Slash: 0.6
-    Piercing: 0.7
+    Piercing: 0.4
     Structural: 0.75
-    Heat: 0.5
+    Heat: 0.4
   flatReductions:
     Blunt: 5
     Slash: 5
@@ -329,12 +333,11 @@
   coefficients:
     Blunt: 0.8
     Slash: 0.7
-    Piercing: 0.8
+    Piercing: 0.4
     Structural: 0.85
-    Heat: 0.5
+    Heat: 0.4
   flatReductions:
     Blunt: 5
     Slash: 5
     Piercing: 5
     Heat: 3
-    Structural: 3

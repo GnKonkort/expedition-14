@@ -1,9 +1,10 @@
-using System.Numerics;
+﻿using System.Numerics;
 using Content.Shared.Doors.Components;
 using Content.Shared.Projectiles;
 using Robust.Shared.Map;
 using Robust.Shared.Physics.Events;
 using Robust.Shared.Physics.Systems;
+using Robust.Shared.Timing;
 
 namespace Content.Shared.Cover;
 
@@ -13,6 +14,7 @@ namespace Content.Shared.Cover;
 public sealed class SharedCoverSystem : EntitySystem
 {
     [Dependency] private readonly SharedTransformSystem _transform = default!;
+    [Dependency] private readonly IGameTiming _timing = default!;
 
     private EntityQuery<DirectionalCoverComponent> _directionalQuery;
     private EntityQuery<ProbabilisticCoverComponent> _probQuery;
@@ -45,7 +47,8 @@ public sealed class SharedCoverSystem : EntitySystem
 
         var shooter = projectile.Shooter;
         var origin = ResolveShotOrigin(args.OtherEntity, shooter);
-        if (!ShouldDirectionalBlock(ent, origin))
+        if (!ShouldDirectionalBlock(ent, origin) ||
+            !RollBlockChance(ent.Owner, args.OtherEntity, ent.Comp.BlockChance))
             args.Cancelled = true;
     }
 
@@ -60,26 +63,32 @@ public sealed class SharedCoverSystem : EntitySystem
             args.Cancelled = true;
     }
 
-    /// <summary>
-    /// True when this cover entity should stop a hitscan/projectile originating at <paramref name="shotOrigin"/>.
-    /// </summary>
-    public bool ShouldBlockShot(EntityUid cover, MapCoordinates shotOrigin, EntityUid? seedEntity = null, EntityUid? shooter = null)
+    public bool ShouldBlockShot(
+        EntityUid cover,
+        MapCoordinates shotOrigin,
+        EntityUid? seedEntity = null,
+        EntityUid? shooter = null,
+        int entropy = 0)
     {
         if (IsCoverInactive(cover))
             return false;
 
-        if (_directionalQuery.HasComponent(cover))
-            return ShouldDirectionalBlock(cover, shotOrigin);
+        var seed = seedEntity ?? cover;
+
+        if (_directionalQuery.TryGetComponent(cover, out var directional))
+        {
+            if (!ShouldDirectionalBlock(cover, shotOrigin))
+                return false;
+
+            return RollBlockChance(cover, seed, directional.BlockChance, entropy);
+        }
 
         if (_probQuery.TryGetComponent(cover, out var prob))
-            return ShouldProbabilisticBlock((cover, prob), shotOrigin, seedEntity ?? cover);
+            return ShouldProbabilisticBlock((cover, prob), shotOrigin, seed, entropy);
 
         return false;
     }
 
-    /// <summary>
-    /// Whether a soft-cover entity participates in cover queries (closed door / not deleted).
-    /// </summary>
     public bool IsCoverActive(EntityUid cover)
     {
         return !IsCoverInactive(cover);
@@ -90,7 +99,6 @@ public sealed class SharedCoverSystem : EntitySystem
         if (!Exists(cover))
             return true;
 
-        // Folding metal barricades use Door — open means folded flat, no cover.
         if (_doorQuery.TryGetComponent(cover, out var door) && door.State != DoorState.Closed)
             return true;
 
@@ -105,9 +113,6 @@ public sealed class SharedCoverSystem : EntitySystem
         return _transform.GetMapCoordinates(projectile);
     }
 
-    /// <summary>
-    /// Local south is the barricade face. Shots whose origin lies in the front hemisphere are blocked.
-    /// </summary>
     public bool ShouldDirectionalBlock(EntityUid cover, MapCoordinates shotOrigin)
     {
         var coverXform = Transform(cover);
@@ -120,11 +125,14 @@ public sealed class SharedCoverSystem : EntitySystem
         if (toOrigin.LengthSquared() < 0.0001f)
             return true;
 
-        // Origin in front of the face → incoming from attack side → block.
         return Vector2.Dot(toOrigin, faceWorld) > 0f;
     }
 
-    public bool ShouldProbabilisticBlock(Entity<ProbabilisticCoverComponent> cover, MapCoordinates shotOrigin, EntityUid seedEntity)
+    public bool ShouldProbabilisticBlock(
+        Entity<ProbabilisticCoverComponent> cover,
+        MapCoordinates shotOrigin,
+        EntityUid seedEntity,
+        int entropy = 0)
     {
         var coverMap = _transform.GetMapCoordinates(cover);
         if (coverMap.MapId != shotOrigin.MapId)
@@ -134,32 +142,34 @@ public sealed class SharedCoverSystem : EntitySystem
         if (dist <= cover.Comp.AdjacentPassRange)
             return false;
 
-        // Deterministic per (projectile/seed, cover) so predicted collide matches server.
-        var hash = HashCode.Combine(GetNetEntity(seedEntity), GetNetEntity(cover.Owner));
-        var roll = (hash & 0xFFFF) / (float)0xFFFF;
-        return roll < cover.Comp.BlockChance;
+        return RollBlockChance(cover.Owner, seedEntity, cover.Comp.BlockChance, entropy);
     }
 
-    /// <summary>
-    /// World-space unit vector pointing out of the barricade's front (local south).
-    /// </summary>
+    private bool RollBlockChance(EntityUid cover, EntityUid seedEntity, float blockChance, int entropy = 0)
+    {
+        if (blockChance <= 0f)
+            return false;
+        if (blockChance >= 1f)
+            return true;
+
+        if (entropy == 0)
+            entropy = (int)_timing.CurTick.Value;
+
+        var hash = HashCode.Combine(GetNetEntity(seedEntity), GetNetEntity(cover), entropy);
+        var roll = (hash & 0xFFFF) / (float)0xFFFF;
+        return roll < blockChance;
+    }
+
     public Vector2 GetDirectionalCoverFace(EntityUid cover)
     {
         return _transform.GetWorldRotation(cover).RotateVec(new Vector2(0f, -1f));
     }
 
-    /// <summary>
-    /// Grid offset one tile behind the face (defender side).
-    /// Uses dominant-axis snap — <see cref="MathF.Round"/> midpoints to 0 and yields Vector2i.Zero on diagonals.
-    /// </summary>
     public Vector2i GetDefenderApproachOffset(EntityUid cover)
     {
         return DominantAxis(-GetDirectionalCoverFace(cover));
     }
 
-    /// <summary>
-    /// Snap a world direction to a single cardinal grid step (never Zero unless input is Zero).
-    /// </summary>
     public static Vector2i DominantAxis(Vector2 dir)
     {
         if (dir.LengthSquared() < 0.0001f)

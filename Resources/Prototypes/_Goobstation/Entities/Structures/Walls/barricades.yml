@@ -9,6 +9,7 @@
     - state: base
   - type: Fixtures
     fixtures:
+      # Physical strip (players / crawl). Keeps the low visual profile of the cade.
       cade:
         shape: !type:PhysShapeAabb
           bounds: "-0.49,-0.49,0.49,-0.38"
@@ -18,8 +19,17 @@
         layer:
         - TableLayer
         - LowImpassable # no mice or crawling chuds allowed, its flush with the floor
+      # Soft cover volume for bullets / energy bolts / hitscan — nearly full tile.
+      # Opaque: NF laser bolts mask Opaque only. BulletImpassable: kinetic projectiles + hitscan OR.
+      softcover:
+        shape: !type:PhysShapeAabb
+          bounds: "-0.45,-0.45,0.45,0.45"
+        density: 1
+        layer:
         - BulletImpassable
+        - Opaque
   - type: DirectionalCover
+    blockChance: 0.8
   - type: RotationDrawDepth
     southDrawDepth: OverMobs
   - type: Anchorable
