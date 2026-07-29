@@ -92,55 +92,61 @@ public sealed partial class NPCSteeringSystem
             ClimbDebug(uid,
                 $"HANDLE poly climb={isClimbable} door={isDoor} access={isAccessRequired} obstacles={obstacleEnts.Count} flags={component.Flags}");
 
-            // Just walk into it stupid
-            if (isDoor && !isAccessRequired)
+            // Door policy: access-open / hack / pry / breach via shared bypass system.
+            if (isDoor && (component.Flags & (PathFlags.Interact | PathFlags.Prying | PathFlags.Smashing | PathFlags.Access)) != 0x0)
             {
                 var doorQuery = GetEntityQuery<DoorComponent>();
-
-                // ... At least if it's not a bump open.
                 foreach (var ent in obstacleEnts)
                 {
                     if (!doorQuery.TryGetComponent(ent, out var door))
                         continue;
 
-                    if (!door.BumpOpen && (component.Flags & PathFlags.Interact) != 0x0)
-                    {
-                        if (door.State != DoorState.Opening)
-                        {
-                            _interaction.InteractionActivate(uid, ent);
-                            return SteeringObstacleStatus.Continuing;
-                        }
-                    }
-                }
+                    // Wait for open animation — do not repath or keep walking into the frame.
+                    if (door.State == DoorState.Open)
+                        return SteeringObstacleStatus.Completed;
 
-                // If we get to here then didn't succeed for reasons.
+                    if (door.State == DoorState.Opening)
+                        return SteeringObstacleStatus.Continuing;
+
+                    if (_doorBypass.TryHandleDoorObstacle(uid, ent, out var doorDoAfter))
+                    {
+                        if (doorDoAfter != null)
+                            component.DoAfterId = doorDoAfter;
+                        return SteeringObstacleStatus.Continuing;
+                    }
+
+                    // Blocking door we cannot open → fail/repath instead of dancing.
+                    return SteeringObstacleStatus.Failed;
+                }
             }
 
-            if ((component.Flags & PathFlags.Prying) != 0x0 && isDoor)
+            // Legacy bump-open for non-access doors when Interact is set and bypass returned nothing.
+            if (isDoor && !isAccessRequired)
             {
                 var doorQuery = GetEntityQuery<DoorComponent>();
 
-                // Get the relevant obstacle
                 foreach (var ent in obstacleEnts)
                 {
-                    if (doorQuery.TryGetComponent(ent, out var door) && door.State != DoorState.Open)
+                    if (!doorQuery.TryGetComponent(ent, out var door))
+                        continue;
+
+                    if (door.State == DoorState.Open)
+                        return SteeringObstacleStatus.Completed;
+
+                    if (door.State == DoorState.Opening)
+                        return SteeringObstacleStatus.Continuing;
+
+                    if (!door.BumpOpen && (component.Flags & PathFlags.Interact) != 0x0)
                     {
-                        // TODO: Use the verb.
-
-                        if (door.State != DoorState.Opening)
-                            _pryingSystem.TryPry(ent, uid, out id, uid);
-
-                        component.DoAfterId = id;
+                        _interaction.InteractionActivate(uid, ent);
                         return SteeringObstacleStatus.Continuing;
                     }
                 }
-
-                if (obstacleEnts.Count == 0)
-                    return SteeringObstacleStatus.Completed;
             }
+
             // Try climbing obstacles (before smash — barricades/tables are climbable AND destructible).
             // Only the nearest adjacent climbable — never a cade several tiles away.
-            else if (isClimbable && TryComp<ClimbingComponent>(uid, out var climbing) && climbing.CanClimb)
+            if (isClimbable && TryComp<ClimbingComponent>(uid, out var climbing) && climbing.CanClimb)
             {
                 component.Flags |= PathFlags.Climbing;
 
@@ -176,7 +182,8 @@ public sealed partial class NPCSteeringSystem
                 // Vault didn't start — fail so we repath around instead of freezing on the cade.
                 return SteeringObstacleStatus.Failed;
             }
-            // Try smashing obstacles.
+            // Try smashing obstacles (walls / grilles). Never windows — LOS may see through glass,
+            // but movement must path around, not punch through.
             else if ((component.Flags & PathFlags.Smashing) != 0x0)
             {
                 if (_melee.TryGetWeapon(uid, out _, out var meleeWeapon) && meleeWeapon.NextAttack <= _timing.CurTime && TryComp<CombatModeComponent>(uid, out var combatMode))
@@ -184,13 +191,14 @@ public sealed partial class NPCSteeringSystem
                     _combat.SetInCombatMode(uid, true, combatMode);
                     var destructibleQuery = GetEntityQuery<DestructibleComponent>();
 
-                    // TODO: This is a hack around grilles and windows.
                     _random.Shuffle(obstacleEnts);
                     var attackResult = false;
 
                     foreach (var ent in obstacleEnts)
                     {
-                        // TODO: Validate we can damage it
+                        if (_tag.HasTag(ent, WindowTag))
+                            continue;
+
                         if (destructibleQuery.HasComponent(ent))
                         {
                             attackResult = _melee.AttemptLightAttack(uid, uid, meleeWeapon, ent);
@@ -200,7 +208,6 @@ public sealed partial class NPCSteeringSystem
 
                     _combat.SetInCombatMode(uid, false, combatMode);
 
-                    // Blocked or the likes?
                     if (!attackResult)
                         return SteeringObstacleStatus.Failed;
 

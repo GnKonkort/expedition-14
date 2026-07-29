@@ -30,6 +30,7 @@ public sealed class NPCGrenadeSystem : EntitySystem
     [Dependency] private readonly SharedTransformSystem _transform = default!;
     [Dependency] private readonly NPCGunAmmoSystem _ammo = default!;
     [Dependency] private readonly NPCSquadSystem _squads = default!;
+    [Dependency] private readonly Content.Shared.NPC.Systems.NpcFactionSystem _faction = default!;
 
     private EntityQuery<TransformComponent> _xformQuery;
 
@@ -150,6 +151,9 @@ public sealed class NPCGrenadeSystem : EntitySystem
 
     public bool TryPrimeAndThrow(EntityUid owner, EntityUid grenade, EntityUid target)
     {
+        if (!IsThrowSafe(owner, target))
+            return false;
+
         if (!_ammo.TryObtainInHand(owner, grenade))
             return false;
 
@@ -166,6 +170,43 @@ public sealed class NPCGrenadeSystem : EntitySystem
             return false;
 
         _throwing.TryThrow(grenade, targetXform.Coordinates, baseThrowSpeed: 11.5f, user: owner, compensateFriction: true, recoil: false);
+        return true;
+    }
+
+    /// <summary>
+    /// Friendly-fire + minimum range gate before priming a grenade.
+    /// </summary>
+    public bool IsThrowSafe(EntityUid owner, EntityUid target, float blastRadius = 3.5f, float minRange = 3f)
+    {
+        if (!_xformQuery.TryGetComponent(owner, out var ownerXform) ||
+            !_xformQuery.TryGetComponent(target, out var targetXform))
+            return false;
+
+        var ownerMap = _transform.GetMapCoordinates(owner, ownerXform);
+        var targetMap = _transform.GetMapCoordinates(target, targetXform);
+        if (ownerMap.MapId != targetMap.MapId)
+            return false;
+
+        var dist = (targetMap.Position - ownerMap.Position).Length();
+        if (dist < minRange)
+            return false;
+
+        foreach (var friendly in _faction.GetNearbyFriendlies(owner, dist + blastRadius))
+        {
+            if (friendly == owner)
+                continue;
+
+            if (!_xformQuery.TryGetComponent(friendly, out var fx))
+                continue;
+
+            var fMap = _transform.GetMapCoordinates(friendly, fx);
+            if (fMap.MapId != targetMap.MapId)
+                continue;
+
+            if ((fMap.Position - targetMap.Position).Length() <= blastRadius)
+                return false;
+        }
+
         return true;
     }
 

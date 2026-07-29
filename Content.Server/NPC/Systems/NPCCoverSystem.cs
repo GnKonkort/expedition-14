@@ -343,7 +343,7 @@ public sealed class NPCCoverSystem : EntitySystem
                 continue;
 
             if (!_interaction.InRangeUnobstructed(mapCoords, enemyMap, distEnemy + 0.5f,
-                    CollisionGroup.Impassable | CollisionGroup.InteractImpassable))
+                    CollisionGroup.Opaque))
                 continue;
 
             var score = -distNpc - MathF.Abs(distEnemy - preferredRange);
@@ -489,8 +489,8 @@ public sealed class NPCCoverSystem : EntitySystem
 
     private bool HasShootLos(EntityUid from, EntityUid to, float range)
     {
-        return _interaction.InRangeUnobstructed(from, to, range,
-            CollisionGroup.Impassable | CollisionGroup.InteractImpassable);
+        // Opaque only — glass/windows must not block NPC shoot LOS.
+        return _interaction.InRangeUnobstructed(from, to, range, CollisionGroup.Opaque);
     }
 
     private float ScoreCandidate(

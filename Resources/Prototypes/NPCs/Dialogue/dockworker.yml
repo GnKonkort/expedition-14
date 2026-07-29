@@ -1,0 +1,30 @@
+- type: npcDialogue
+  id: DockworkerGreeting
+  start: greeting
+  nodes:
+    greeting:
+      speech: npc-dialogue-dock-greeting
+      options:
+      - text: npc-dialogue-dock-opt-work
+        next: about-work
+      - text: npc-dialogue-dock-opt-station
+        next: about-station
+      - text: npc-dialogue-dock-opt-bye
+        next: farewell
+    about-work:
+      speech: npc-dialogue-dock-work
+      options:
+      - text: npc-dialogue-dock-opt-more
+        next: greeting
+      - text: npc-dialogue-dock-opt-bye
+        next: farewell
+    about-station:
+      speech: npc-dialogue-dock-station
+      options:
+      - text: npc-dialogue-dock-opt-more
+        next: greeting
+      - text: npc-dialogue-dock-opt-bye
+        next: farewell
+    farewell:
+      speech: npc-dialogue-dock-farewell
+      options: []

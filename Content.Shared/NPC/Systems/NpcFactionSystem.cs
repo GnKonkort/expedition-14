@@ -273,6 +273,34 @@ public sealed partial class NpcFactionSystem : EntitySystem
     }
 
     /// <summary>
+    /// Replace faction membership and optional per-entity friendly/hostile overrides.
+    /// </summary>
+    public void SetFactions(
+        Entity<NpcFactionMemberComponent?> ent,
+        [ForbidLiteral] HashSet<ProtoId<NpcFactionPrototype>> factions,
+        HashSet<ProtoId<NpcFactionPrototype>>? addFriendly = null,
+        HashSet<ProtoId<NpcFactionPrototype>>? addHostile = null)
+    {
+        ent.Comp ??= EnsureComp<NpcFactionMemberComponent>(ent);
+        ent.Comp.Factions.Clear();
+        ent.Comp.AddFriendlyFactions = addFriendly is { Count: > 0 } ? addFriendly : null;
+        ent.Comp.AddHostileFactions = addHostile is { Count: > 0 } ? addHostile : null;
+
+        foreach (var faction in factions)
+        {
+            if (!_proto.HasIndex(faction))
+            {
+                Log.Error($"Unable to find faction {faction}");
+                continue;
+            }
+
+            ent.Comp.Factions.Add(faction);
+        }
+
+        RefreshFactions((ent, ent.Comp));
+    }
+
+    /// <summary>
     /// Makes the source faction friendly to the target faction, 1-way.
     /// </summary>
     public void MakeFriendly([ForbidLiteral] string source, [ForbidLiteral] string target)
@@ -326,12 +354,65 @@ public sealed partial class NpcFactionSystem : EntitySystem
                 Hostile = faction.Hostile.ToHashSet()
             });
 
+        WarnAsymmetricHostility();
+
         var query = AllEntityQuery<NpcFactionMemberComponent>();
         while (query.MoveNext(out var uid, out var comp))
         {
             comp.FriendlyFactions.Clear();
             comp.HostileFactions.Clear();
             RefreshFactions((uid, comp));
+        }
+    }
+
+    /// <summary>
+    /// Returns the editor/gameplay category for a faction prototype.
+    /// </summary>
+    public NpcFactionCategory GetCategory([ForbidLiteral] string faction)
+    {
+        return _proto.TryIndex<NpcFactionPrototype>(faction, out var proto)
+            ? proto.Category
+            : NpcFactionCategory.Special;
+    }
+
+    /// <summary>
+    /// Enumerates faction prototypes matching a category.
+    /// </summary>
+    public IEnumerable<NpcFactionPrototype> EnumerateByCategory(NpcFactionCategory category)
+    {
+        foreach (var proto in _proto.EnumeratePrototypes<NpcFactionPrototype>())
+        {
+            if (proto.Category == category)
+                yield return proto;
+        }
+    }
+
+    /// <summary>
+    /// Enumerates factions intended for the custom NPC editor picker.
+    /// </summary>
+    public IEnumerable<NpcFactionPrototype> EnumerateEditorVisible()
+    {
+        foreach (var proto in _proto.EnumeratePrototypes<NpcFactionPrototype>())
+        {
+            if (proto.EditorVisible)
+                yield return proto;
+        }
+    }
+
+    private void WarnAsymmetricHostility()
+    {
+        foreach (var (id, data) in _factions)
+        {
+            foreach (var hostile in data.Hostile)
+            {
+                if (!_factions.TryGetValue(hostile, out var other))
+                    continue;
+
+                if (other.Hostile.Contains(id) || other.Friendly.Contains(id))
+                    continue;
+
+                Log.Debug($"Faction hostility is one-way: {id} -> {hostile} (no reciprocal hostile/friendly on target)");
+            }
         }
     }
 }

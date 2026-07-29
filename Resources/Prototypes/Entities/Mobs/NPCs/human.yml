@@ -11,6 +11,8 @@
   - type: NpcFactionMember
     factions:
     - NanoTrasen
+  - type: NpcDialogue
+    dialogue: DockworkerGreeting
 
 - type: entity
   name: salvager
@@ -28,6 +30,17 @@
     - type: HTN
       rootTask:
         task: SimpleHumanoidHostileCompound
+      blackboard:
+        NavClimb: !type:Bool
+          true
+        NavInteract: !type:Bool
+          true
+        NavPry: !type:Bool
+          true
+        NavSmash: !type:Bool
+          true
+    - type: NPCRole
+      profile: SyndicateFootsoldier
     - type: NPCSquadMember
       joinRange: 8
       leaveRange: 14
@@ -50,6 +63,17 @@
   - type: HTN
     rootTask:
       task: SimpleHumanoidHostileCompound
+    blackboard:
+      NavClimb: !type:Bool
+        true
+      NavInteract: !type:Bool
+        true
+      NavPry: !type:Bool
+        true
+      NavSmash: !type:Bool
+        true
+  - type: NPCRole
+    profile: SyndicateFootsoldier
   - type: NPCSquadMember
     joinRange: 8
     leaveRange: 14
@@ -71,6 +95,17 @@
     - type: HTN
       rootTask:
         task: SimpleHumanoidHostileCompound
+      blackboard:
+        NavClimb: !type:Bool
+          true
+        NavInteract: !type:Bool
+          true
+        NavPry: !type:Bool
+          true
+        NavSmash: !type:Bool
+          true
+    - type: NPCRole
+      profile: SyndicateFootsoldier
     - type: NPCSquadMember
       joinRange: 8
       leaveRange: 14
@@ -80,6 +115,97 @@
   name: syndicate shuttle pilot
   parent: MobSyndicateFootsoldier
   id: MobSyndicateFootsoldierPilot
+
+- type: entity
+  name: station medic NPC
+  parent: BaseMobHuman
+  id: MobStationMedic
+  suffix: NPC
+  components:
+    - type: NpcFactionMember
+      factions:
+        - NanoTrasen
+    - type: Loadout
+      prototypes:
+        - NpcMedicGear
+    - type: InputMover
+    - type: MobMover
+    - type: HTN
+      rootTask:
+        task: HumanoidMedicCompound
+      blackboard:
+        NavClimb: !type:Bool
+          true
+        NavInteract: !type:Bool
+          true
+        NavPry: !type:Bool
+          true
+        NavSmash: !type:Bool
+          true
+    - type: NPCRole
+      profile: StationMedic
+
+- type: entity
+  name: station engineer NPC
+  parent: BaseMobHuman
+  id: MobStationEngineer
+  suffix: NPC
+  components:
+    - type: NpcFactionMember
+      factions:
+        - NanoTrasen
+    - type: Loadout
+      prototypes:
+        - NpcEngineerGear
+    - type: InputMover
+    - type: MobMover
+    - type: HTN
+      rootTask:
+        task: HumanoidEngineerCompound
+      blackboard:
+        NavClimb: !type:Bool
+          true
+        NavInteract: !type:Bool
+          true
+        NavPry: !type:Bool
+          true
+        NavSmash: !type:Bool
+          true
+    - type: NPCRole
+      profile: StationEngineer
+
+- type: entity
+  name: station security NPC
+  parent: BaseMobHuman
+  id: MobStationSecurity
+  suffix: NPC
+  components:
+    - type: NpcFactionMember
+      factions:
+        - NanoTrasen
+    - type: Loadout
+      prototypes:
+        - NpcSecurityGear
+    - type: InputMover
+    - type: MobMover
+    - type: HTN
+      rootTask:
+        task: HumanoidSecurityCompound
+      blackboard:
+        NavClimb: !type:Bool
+          true
+        NavInteract: !type:Bool
+          true
+        NavPry: !type:Bool
+          true
+        NavSmash: !type:Bool
+          true
+    - type: NPCRole
+      profile: StationSecurity
+    - type: NPCSquadMember
+      joinRange: 8
+      leaveRange: 14
+      rallyRadius: 2.5
 
 - type: entity
   parent: BaseMobHuman

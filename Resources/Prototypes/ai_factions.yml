@@ -1,7 +1,12 @@
+# Core SS14 AI factions. Category / editorVisible drive the custom NPC editor.
+
 - type: npcFaction
   id: Dragon
+  category: Wildlife
   hostile:
     - NanoTrasen
+    - CrewCivilian
+    - Independent
     - Syndicate
     - Xeno
     - PetsNT
@@ -24,6 +29,8 @@
 
 - type: npcFaction
   id: NanoTrasen
+  category: Crew
+  description: Station crew / corporate affiliation.
   hostile:
   - SimpleHostile
   - Syndicate
@@ -46,9 +53,59 @@
   - SiliconsExpeditionNF # Frontier
   - AberrantFleshExpeditionNF # Frontier
   - ContrabandClothing # Frontier
+  friendly:
+  - CrewCivilian
+
+- type: npcFaction
+  id: CrewCivilian
+  category: Civilian
+  description: Non-combat station civilians friendly to crew.
+  friendly:
+  - NanoTrasen
+  - Passive
+  - PetsNT
+  hostile:
+  - SimpleHostile
+  - Syndicate
+  - Xeno
+  - Zombie
+  - Revolutionary
+  - Dragon
+  - AllHostile
+  - Wizard
+  - Xenoborg
+  - WizFedFaction
+  - BloodCultNF
+  - NFSyndicate
+  - NFPirate
+  - ExplorersExpeditionNF
+  - ArtifactConstruct
+  - StreetGangNF
+  - DinosaursNF
+  - MercenariesExpeditionNF
+  - SiliconsExpeditionNF
+  - AberrantFleshExpeditionNF
+  - ContrabandClothing
+
+- type: npcFaction
+  id: Independent
+  category: Civilian
+  description: Neutrals / mercs / traders. Not hostile to crew by default.
+  hostile:
+  - SimpleHostile
+  - Xeno
+  - Zombie
+  - Dragon
+  - AllHostile
+  - Wizard
+  - Xenoborg
+  - DinosaursNF
+  - AberrantFleshExpeditionNF
+  - ArtifactConstruct
 
 - type: npcFaction
   id: Mouse
+  category: Wildlife
   hostile:
   - PetsNT
   # - AllHostile # Frontier
@@ -57,9 +114,12 @@
 
 - type: npcFaction
   id: Passive
+  category: Civilian
+  description: Completely non-hostile.
 
 - type: npcFaction
   id: PetsNT
+  category: Wildlife
   hostile:
   - Mouse
   # - SimpleHostile # Frontier
@@ -71,8 +131,11 @@
 
 - type: npcFaction
   id: SimpleHostile
+  category: Wildlife
   hostile:
   - NanoTrasen
+  - CrewCivilian
+  - Independent
   - Syndicate
   - Passive
   - PetsNT
@@ -99,13 +162,17 @@
 
 - type: npcFaction
   id: SimpleNeutral
+  category: Civilian
 
 - type: npcFaction
   id: Syndicate
+  category: Antag
+  description: Hostile to station crew.
   friendly: # Frontier
   - NFSyndicate # Frontier
   hostile:
   - NanoTrasen
+  - CrewCivilian
   - SimpleHostile
   - Xeno
   - PetsNT
@@ -129,8 +196,11 @@
 
 - type: npcFaction
   id: Xeno
+  category: Wildlife
   hostile:
   - NanoTrasen
+  - CrewCivilian
+  - Independent
   - Syndicate
   - Passive
   - PetsNT
@@ -156,8 +226,11 @@
 
 - type: npcFaction
   id: Zombie
+  category: Wildlife
   hostile:
   - NanoTrasen
+  - CrewCivilian
+  - Independent
   - SimpleNeutral
   - SimpleHostile
   - Syndicate
@@ -184,8 +257,10 @@
 
 - type: npcFaction
   id: Revolutionary
+  category: Antag
   hostile:
   - NanoTrasen
+  - CrewCivilian
   - Zombie
   - SimpleHostile
   - Dragon
@@ -207,8 +282,12 @@
 
 - type: npcFaction
   id: AllHostile # Frontier: use HostileUniversally
+  category: Special
+  editorVisible: false
   hostile:
   - NanoTrasen
+  - CrewCivilian
+  - Independent
   - Dragon
   - Mouse
   - Passive
@@ -224,8 +303,11 @@
 
 - type: npcFaction
   id: Wizard
+  category: Antag
   hostile:
   - NanoTrasen
+  - CrewCivilian
+  - Independent
   - Dragon
   - Mouse
   - Passive
@@ -254,9 +336,12 @@
 
 - type: npcFaction
   id: Xenoborg
+  category: Antag
   hostile:
   # they have brains
   - NanoTrasen
+  - CrewCivilian
+  - Independent
   - Syndicate
   - Zombie
   - Revolutionary
@@ -265,7 +350,7 @@
   - Xeno # rivalry
 
   # cause they are hostile to them
-  - SimpleHostile 
+  - SimpleHostile
   - AllHostile
   - WizFedFaction # Frontier
   - BloodCultNF # Frontier

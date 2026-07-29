@@ -37,9 +37,10 @@ public sealed partial class GunOperator : HTNOperator, IHtnConditionalShutdown
 
     /// <summary>
     /// If true, only opaque objects will block line of sight.
+    /// Defaults true so glass/windows (GlassLayer) do not block NPC vision.
     /// </summary>
     [DataField("opaqueKey")]
-    public bool UseOpaqueForLOSChecks = false;
+    public bool UseOpaqueForLOSChecks = true;
 
     /// <summary>
     /// Hold soft cover: stand still until the enemy enters melee range or the cover is destroyed.

@@ -254,6 +254,31 @@
 - type: htnCompound
   id: RangedCombatCompound
   branches:
+    # 0. Emergency medipen on critical allies
+    - preconditions:
+        - !type:HasMatchingHealItemPrecondition
+          self: false
+          allowKits: false
+          allowMedipens: true
+          critAllyPensOnly: true
+      tasks:
+        - !type:HTNCompoundTask
+          task: CombatMedipenAllyCompound
+
+    # 0b. Combat medipen when treatable self-damage > 15 and a matching pen is owned
+    - preconditions:
+        - !type:NeedsTreatableHealPrecondition
+          self: true
+          allowKits: false
+          allowMedipens: true
+        - !type:HasMatchingHealItemPrecondition
+          self: true
+          allowKits: false
+          allowMedipens: true
+      tasks:
+        - !type:HTNCompoundTask
+          task: CombatMedipenSelfCompound
+
     # 1. Insert spare mag when slot empty/spent (even if chamber still has a round)
     - preconditions:
         - !type:OwnedGunPrecondition
@@ -288,6 +313,17 @@
       tasks:
         - !type:HTNPrimitiveTask
           operator: !type:StowEnergyGunForChargeOperator
+
+    # 1e. Opportunistic grenade throw (optional branch — fails soft into gun fight)
+    - preconditions:
+        - !type:NearbyHostilesPrecondition
+      tasks:
+        - !type:HTNPrimitiveTask
+          operator: !type:UtilityOperator
+            proto: NearbyGunTargets
+
+        - !type:HTNCompoundTask
+          task: GrenadeCombatCompound
 
     # 2. Fight when stocked (draw happens inside GunCombatCompound)
     - preconditions:

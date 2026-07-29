@@ -1,0 +1,137 @@
+# Capability compounds for modular humanoid NPC agents.
+
+- type: htnCompound
+  id: AtmosFleeCompound
+  branches:
+    - preconditions:
+        - !type:KeyBoolEqualsPrecondition
+          key: NeedSeekAtmosphere
+          value: true
+      tasks:
+        - !type:HTNPrimitiveTask
+          operator: !type:PickAtmosFleeOperator
+
+        - !type:HTNPrimitiveTask
+          operator: !type:MoveToOperator
+            pathfindInPlanning: true
+            removeKeyOnFinish: true
+            targetKey: TargetCoordinates
+            rangeKey: MovementRange
+
+- type: htnCompound
+  id: AccessBypassCompound
+  branches:
+    - preconditions:
+        - !type:KeyBoolEqualsPrecondition
+          key: NeedDoorBlocked
+          value: true
+      tasks:
+        - !type:HTNPrimitiveTask
+          operator: !type:BypassDoorOperator
+
+- type: htnCompound
+  id: InventoryPolicyCompound
+  branches:
+    - preconditions:
+        - !type:KeyBoolEqualsPrecondition
+          key: NeedHasHostile
+          value: true
+      tasks:
+        - !type:HTNPrimitiveTask
+          operator: !type:EnforceInventoryPolicyOperator
+
+- type: htnCompound
+  id: GrenadeCombatCompound
+  branches:
+    - tasks:
+        - !type:HTNPrimitiveTask
+          preconditions:
+            - !type:KeyExistsPrecondition
+              key: Target
+          operator: !type:ThrowGrenadeAtTargetOperator
+            targetKey: Target
+
+# Canonical humanoid agent root — priority ladder.
+# Optional capability compounds MUST fail closed in Plan() or they starve combat.
+- type: htnCompound
+  id: HumanoidAgentCompound
+  branches:
+    - tasks:
+        - !type:HTNCompoundTask
+          task: AtmosFleeCompound
+
+    - tasks:
+        - !type:HTNCompoundTask
+          task: WaitHealDoAfterCompound
+
+    - tasks:
+        - !type:HTNCompoundTask
+          task: WaitDefibDoAfterCompound
+
+    - tasks:
+        - !type:HTNCompoundTask
+          task: InventoryPolicyCompound
+
+    - preconditions:
+        - !type:PreferCloseMeleePrecondition
+      tasks:
+        - !type:HTNCompoundTask
+          task: MeleeCombatCompound
+
+    - tasks:
+        - !type:HTNCompoundTask
+          task: RangedCombatCompound
+
+    - tasks:
+        - !type:HTNCompoundTask
+          task: MeleeCombatCompound
+
+    - tasks:
+        - !type:HTNCompoundTask
+          task: HealSelfKitCompound
+    - tasks:
+        - !type:HTNCompoundTask
+          task: HealDeadAllyKitCompound
+    - tasks:
+        - !type:HTNCompoundTask
+          task: DefibAllyCompound
+    - tasks:
+        - !type:HTNCompoundTask
+          task: CombatMedipenAllyCompound
+    - tasks:
+        - !type:HTNCompoundTask
+          task: HealAllyKitCompound
+    - tasks:
+        - !type:HTNCompoundTask
+          task: DiscardEmptyMedipenCompound
+
+    # Loot / drop / bag upgrade (includes med stocking)
+    - tasks:
+        - !type:HTNCompoundTask
+          task: InventoryManageCompound
+
+    - tasks:
+        - !type:HTNCompoundTask
+          task: FoodCompound
+
+    - tasks:
+        - !type:HTNCompoundTask
+          task: AccessBypassCompound
+    - tasks:
+        - !type:HTNCompoundTask
+          task: SquadRallyCompound
+
+    - tasks:
+        - !type:HTNCompoundTask
+          task: PeaceStowCompound
+    - tasks:
+        - !type:HTNCompoundTask
+          task: IdleCompound
+
+# Back-compat alias — nest the canonical root (no duplicated branches).
+- type: htnCompound
+  id: SimpleHumanoidHostileCompound
+  branches:
+    - tasks:
+        - !type:HTNCompoundTask
+          task: HumanoidAgentCompound

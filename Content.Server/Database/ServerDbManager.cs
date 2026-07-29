@@ -347,6 +347,16 @@ namespace Content.Server.Database
 
         #endregion
 
+        #region NPC Presets
+
+        Task<List<NpcPreset>> GetNpcPresetsAsync(CancellationToken cancel = default);
+        Task<NpcPreset?> GetNpcPresetAsync(int id, CancellationToken cancel = default);
+        Task<NpcPreset?> GetNpcPresetByNameAsync(string name, CancellationToken cancel = default);
+        Task<int> UpsertNpcPresetAsync(string name, string createdBy, string dataYaml, int? existingId = null);
+        Task<bool> DeleteNpcPresetAsync(int id);
+
+        #endregion
+
         #region DB Notifications
 
         void SubscribeToNotifications(Action<DatabaseNotification> handler);
@@ -1073,6 +1083,36 @@ namespace Content.Server.Database
         {
             DbWriteOpsMetric.Inc();
             return RunDbCommand(() => _db.CleanIPIntelCache(range));
+        }
+
+        public Task<List<NpcPreset>> GetNpcPresetsAsync(CancellationToken cancel = default)
+        {
+            DbReadOpsMetric.Inc();
+            return RunDbCommand(() => _db.GetNpcPresetsAsync(cancel));
+        }
+
+        public Task<NpcPreset?> GetNpcPresetAsync(int id, CancellationToken cancel = default)
+        {
+            DbReadOpsMetric.Inc();
+            return RunDbCommand(() => _db.GetNpcPresetAsync(id, cancel));
+        }
+
+        public Task<NpcPreset?> GetNpcPresetByNameAsync(string name, CancellationToken cancel = default)
+        {
+            DbReadOpsMetric.Inc();
+            return RunDbCommand(() => _db.GetNpcPresetByNameAsync(name, cancel));
+        }
+
+        public Task<int> UpsertNpcPresetAsync(string name, string createdBy, string dataYaml, int? existingId = null)
+        {
+            DbWriteOpsMetric.Inc();
+            return RunDbCommand(() => _db.UpsertNpcPresetAsync(name, createdBy, dataYaml, existingId));
+        }
+
+        public Task<bool> DeleteNpcPresetAsync(int id)
+        {
+            DbWriteOpsMetric.Inc();
+            return RunDbCommand(() => _db.DeleteNpcPresetAsync(id));
         }
 
         public void SubscribeToNotifications(Action<DatabaseNotification> handler)

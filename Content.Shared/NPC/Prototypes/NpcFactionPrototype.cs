@@ -17,6 +17,25 @@ public sealed partial class NpcFactionPrototype : IPrototype
 
     [DataField]
     public List<ProtoId<NpcFactionPrototype>> Hostile = new();
+
+    /// <summary>
+    /// High-level grouping for the custom NPC editor and tooling.
+    /// </summary>
+    [DataField]
+    public NpcFactionCategory Category = NpcFactionCategory.Special;
+
+    /// <summary>
+    /// When false, the faction is hidden from the normal NPC editor faction picker
+    /// (e.g. meta factions like AllHostile).
+    /// </summary>
+    [DataField]
+    public bool EditorVisible = true;
+
+    /// <summary>
+    /// Optional short description shown in admin tooling.
+    /// </summary>
+    [DataField]
+    public string? Description;
 }
 
 /// <summary>

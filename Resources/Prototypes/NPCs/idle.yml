@@ -10,6 +10,45 @@
             - !type:KeyExistsPrecondition
               key: IdleTime
 
+    # Return to assigned stand point when away from it.
+    - preconditions:
+        - !type:KeyExistsPrecondition
+          key: StandPoint
+        - !type:BuckledPrecondition
+          isBuckled: false
+        - !type:PulledPrecondition
+          isPulled: false
+      tasks:
+        - !type:HTNPrimitiveTask
+          preconditions:
+            - !type:CoordinatesNotInRangePrecondition
+              targetKey: StandPoint
+              rangeKey: StandPointRange
+          operator: !type:MoveToOperator
+            pathfindInPlanning: true
+            targetKey: StandPoint
+            rangeKey: StandPointRange
+            removeKeyOnFinish: false
+
+    # Stay put when idle wandering is disabled.
+    - preconditions:
+        - !type:KeyBoolEqualsPrecondition
+          key: IdleWander
+          value: false
+      tasks:
+        - !type:HTNPrimitiveTask
+          operator: !type:RandomOperator
+            targetKey: IdleTime
+            minKey: MinimumIdleTime
+            maxKey: MaximumIdleTime
+
+        - !type:HTNPrimitiveTask
+          operator: !type:WaitOperator
+            key: IdleTime
+          preconditions:
+            - !type:KeyExistsPrecondition
+              key: IdleTime
+
     # Pick a new spot and wait there.
     - preconditions:
         - !type:BuckledPrecondition

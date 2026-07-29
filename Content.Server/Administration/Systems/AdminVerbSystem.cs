@@ -506,6 +506,20 @@ namespace Content.Server.Administration.Systems
                     };
                     args.Verbs.Add(verb);
                 }
+
+                // Custom NPC editor verb
+                if (_groupController.CanCommand(player, "npceditor"))
+                {
+                    Verb verb = new()
+                    {
+                        Text = Loc.GetString("npc-editor-verb"),
+                        Category = VerbCategory.Debug,
+                        Icon = new SpriteSpecifier.Texture(new ("/Textures/Interface/VerbIcons/outfit.svg.192dpi.png")),
+                        Act = () => _euiManager.OpenEui(new NpcEditorEui(GetNetEntity(args.Target)), player),
+                        Impact = LogImpact.Medium
+                    };
+                    args.Verbs.Add(verb);
+                }
             }
 
             // In range unoccluded verb

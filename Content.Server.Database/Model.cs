@@ -46,6 +46,7 @@ namespace Content.Server.Database
         public DbSet<RoleWhitelist> RoleWhitelists { get; set; } = null!;
         public DbSet<BanTemplate> BanTemplate { get; set; } = null!;
         public DbSet<IPIntelCache> IPIntelCache { get; set; } = null!;
+        public DbSet<NpcPreset> NpcPreset { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -194,6 +195,10 @@ namespace Content.Server.Database
 
             modelBuilder.Entity<ConnectionLog>()
                 .HasIndex(p => p.Time);
+
+            modelBuilder.Entity<NpcPreset>()
+                .HasIndex(p => p.Name)
+                .IsUnique();
 
             modelBuilder.Entity<ConnectionLog>()
                 .Property(p => p.ServerId)
@@ -1331,5 +1336,32 @@ namespace Content.Server.Database
         /// The score IPIntel returned
         /// </summary>
         public float Score { get; set; }
+    }
+
+    /// <summary>
+    /// Admin-created custom NPC preset stored server-side between rounds.
+    /// </summary>
+    public sealed class NpcPreset
+    {
+        public int Id { get; set; }
+
+        /// <summary>
+        /// Unique display name for the preset.
+        /// </summary>
+        public required string Name { get; set; }
+
+        /// <summary>
+        /// Admin name / user id string who created or last saved the preset.
+        /// </summary>
+        public string CreatedBy { get; set; } = string.Empty;
+
+        public DateTime CreatedAt { get; set; }
+
+        public DateTime UpdatedAt { get; set; }
+
+        /// <summary>
+        /// YAML serialization of <c>NpcPresetData</c>.
+        /// </summary>
+        public string Data { get; set; } = string.Empty;
     }
 }

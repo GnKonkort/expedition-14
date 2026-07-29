@@ -28,6 +28,7 @@
     <widgets:GhostGui Name="Ghost" Access="Protected" />
     <inventory:InventoryGui Name="Inventory" Access="Protected" />
     <hotbar:HotbarGui Name="Hotbar" Access="Protected" />
+    <BoxContainer Name="DialogueMenu" Access="Public" Orientation="Vertical" HorizontalAlignment="Center" />
     <chat:ResizableChatBox Name="Chat" Access="Protected" />
     <alerts:AlertsUI Name="Alerts" Access="Protected" />
 </screens:DefaultGameScreen>

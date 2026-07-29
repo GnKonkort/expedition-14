@@ -22,6 +22,8 @@ public sealed partial class SeparatedChatGameScreen : InGameScreen
         SetAnchorAndMarginPreset(TopLeftContainer, LayoutPreset.TopLeft, margin: 10);
         SetAnchorAndMarginPreset(Ghost, LayoutPreset.BottomWide, margin: 80);
         SetAnchorAndMarginPreset(Hotbar, LayoutPreset.BottomWide, margin: 5);
+        // Sit just above the GhostGui / return-to-body button bar.
+        SetAnchorAndMarginPreset(DialogueMenu, LayoutPreset.BottomWide, margin: 130);
         SetAnchorAndMarginPreset(Alerts, LayoutPreset.CenterRight, margin: 10);
 
         ScreenContainer.OnSplitResizeFinished += () =>

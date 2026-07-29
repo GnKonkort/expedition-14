@@ -22,6 +22,7 @@ public sealed partial class NPCBlackboard : IEnumerable<KeyValuePair<string, obj
         {"FollowCloseRange", 3f},
         {"FollowRange", 7f},
         {"IdleRange", 7f},
+        {"StandPointRange", 0.5f},
         {"InteractRange", SharedInteractionSystem.InteractionRange},
         {"MaximumIdleTime", 7f},
         {MedibotInjectRange, 4f},
@@ -39,6 +40,7 @@ public sealed partial class NPCBlackboard : IEnumerable<KeyValuePair<string, obj
         {"AggroVisionRadius", 10f},
         {"AmmoSearchRange", 7f},
         {"AmmoLootHostileRange", 4f},
+        {"MedSearchRange", 7f},
         {"SquadRallyRange", 2.5f},
     };
 
@@ -309,9 +311,73 @@ public sealed partial class NPCBlackboard : IEnumerable<KeyValuePair<string, obj
     public const string GrenadeCooldownEnd = "GrenadeCooldownEnd";
     public const string GrenadeCombatStart = "GrenadeCombatStart";
     public const string GrenadeCombatTarget = "GrenadeCombatTarget";
+
+    /// <summary>
+    /// Patient entity for NPC medical heal (self or faction ally).
+    /// </summary>
+    public const string HealTarget = "HealTarget";
+
+    /// <summary>
+    /// Selected kit / medipen entity for NPC medical heal.
+    /// </summary>
+    public const string HealItem = "HealItem";
+
+    /// <summary>
+    /// Selected defibrillator entity for NPC ally revival.
+    /// </summary>
+    public const string DefibItem = "DefibItem";
+
+    // --- Need board flags (bool) refreshed by NPCNeedSystem ---
+    public const string NeedInVacuum = "NeedInVacuum";
+    public const string NeedLowPressure = "NeedLowPressure";
+    public const string NeedHasHostile = "NeedHasHostile";
+    public const string NeedAmmoCritical = "NeedAmmoCritical";
+    public const string NeedMedStockLow = "NeedMedStockLow";
+    public const string NeedSeekAtmosphere = "NeedSeekAtmosphere";
+    public const string NeedDoorBlocked = "NeedDoorBlocked";
+
+    /// <summary>Safe atmos / room flee destination.</summary>
+    public const string AtmosSafeCoordinates = "AtmosSafeCoordinates";
+
+    /// <summary>Door entity blocking the current path that needs bypass.</summary>
+    public const string BypassDoorTarget = "BypassDoorTarget";
+
+    /// <summary>Active inventory policy prototype id.</summary>
+    public const string InventoryPolicy = "InventoryPolicy";
+
+    /// <summary>Active chem knowledge prototype id.</summary>
+    public const string ChemKnowledge = "ChemKnowledge";
+
+    /// <summary>Damaged repairable structure/entity for engineer NPCs.</summary>
+    public const string RepairTarget = "RepairTarget";
+
+    /// <summary>Selected repair tool (welder etc.).</summary>
+    public const string RepairTool = "RepairTool";
+
+    /// <summary>Hostile/detainee to cuff for security NPCs.</summary>
+    public const string ArrestTarget = "ArrestTarget";
+
+    /// <summary>Handcuff entity selected for arrest.</summary>
+    public const string ArrestCuffs = "ArrestCuffs";
+
+    public const string Target = "Target";
+    public const string TargetCoordinates = "TargetCoordinates";
+
     public const string Owner = "Owner";
     public const string OwnerCoordinates = "OwnerCoordinates";
     public const string MovementTarget = "MovementTarget";
+
+    /// <summary>
+    /// When false, <c>IdleCompound</c> will not pick random wander destinations.
+    /// </summary>
+    public const string IdleWander = "IdleWander";
+
+    /// <summary>
+    /// Fixed idle stand coordinates for posted NPCs.
+    /// </summary>
+    public const string StandPoint = "StandPoint";
+
+    public const string StandPointRange = "StandPointRange";
 
     /// <summary>
     /// Can the NPC click open entities such as doors.

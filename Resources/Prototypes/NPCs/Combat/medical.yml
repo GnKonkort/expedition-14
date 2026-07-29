@@ -1,0 +1,284 @@
+# NPC medical: combat medipens, out-of-combat kits, corpse revive, med stocking (after ammo).
+
+# Pin HTN on an in-progress kit do-after so ConstantlyReplan cannot abort it for combat.
+- type: htnCompound
+  id: WaitHealDoAfterCompound
+  branches:
+    - preconditions:
+        - !type:ActiveHealDoAfterPrecondition
+      tasks:
+        - !type:HTNPrimitiveTask
+          operator: !type:WaitHealDoAfterOperator
+
+# Pin HTN on an in-progress defibrillator zap.
+- type: htnCompound
+  id: WaitDefibDoAfterCompound
+  branches:
+    - preconditions:
+        - !type:ActiveDefibDoAfterPrecondition
+      tasks:
+        - !type:HTNPrimitiveTask
+          operator: !type:WaitDefibDoAfterOperator
+
+# Instant self-inject with a matching medipen while fighting.
+- type: htnCompound
+  id: CombatMedipenSelfCompound
+  branches:
+    - tasks:
+        - !type:HTNPrimitiveTask
+          preconditions:
+            - !type:NeedsTreatableHealPrecondition
+              self: true
+              allowKits: false
+              allowMedipens: true
+            - !type:HasMatchingHealItemPrecondition
+              self: true
+              allowKits: false
+              allowMedipens: true
+          operator: !type:SelectHealItemOperator
+            self: true
+            allowKits: false
+            allowMedipens: true
+
+        - !type:HTNPrimitiveTask
+          operator: !type:UseHealItemOperator
+            stowAfter: true
+
+# Combat / post-revive: one Emergency or damage-matching medipen on a critical ally (overdose-guarded).
+- type: htnCompound
+  id: CombatMedipenAllyCompound
+  branches:
+    # Prefer EmergencyMedipen when carried.
+    - tasks:
+        - !type:HTNPrimitiveTask
+          operator: !type:PickHealTargetOperator
+            self: false
+            critOnly: true
+
+        - !type:HTNPrimitiveTask
+          preconditions:
+            - !type:NeedsTreatableHealPrecondition
+              self: false
+              allowKits: false
+              allowMedipens: true
+              critAllyPensOnly: true
+            - !type:HasMatchingHealItemPrecondition
+              self: false
+              allowKits: false
+              allowMedipens: true
+              critAllyPensOnly: true
+          operator: !type:SelectHealItemOperator
+            self: false
+            allowKits: false
+            allowMedipens: true
+            critAllyPensOnly: true
+
+        - !type:HTNPrimitiveTask
+          operator: !type:MoveToOperator
+            pathfindInPlanning: true
+            removeKeyOnFinish: false
+            targetKey: TargetCoordinates
+            pathfindKey: TargetPathfind
+            rangeKey: InteractRange
+
+        - !type:HTNPrimitiveTask
+          operator: !type:UseHealItemOperator
+            stowAfter: true
+
+    # Otherwise any matching damage medipen (still one inject via medical cooldown).
+    - tasks:
+        - !type:HTNPrimitiveTask
+          operator: !type:PickHealTargetOperator
+            self: false
+            critOnly: true
+
+        - !type:HTNPrimitiveTask
+          preconditions:
+            - !type:NeedsTreatableHealPrecondition
+              self: false
+              allowKits: false
+              allowMedipens: true
+            - !type:HasMatchingHealItemPrecondition
+              self: false
+              allowKits: false
+              allowMedipens: true
+          operator: !type:SelectHealItemOperator
+            self: false
+            allowKits: false
+            allowMedipens: true
+
+        - !type:HTNPrimitiveTask
+          operator: !type:MoveToOperator
+            pathfindInPlanning: true
+            removeKeyOnFinish: false
+            targetKey: TargetCoordinates
+            pathfindKey: TargetPathfind
+            rangeKey: InteractRange
+
+        - !type:HTNPrimitiveTask
+          operator: !type:UseHealItemOperator
+            stowAfter: true
+
+# Out of combat: bandage / pack / ointment / suture / mesh on self.
+- type: htnCompound
+  id: HealSelfKitCompound
+  branches:
+    - tasks:
+        - !type:HTNPrimitiveTask
+          preconditions:
+            - !type:NeedsTreatableHealPrecondition
+              self: true
+              allowKits: true
+              allowMedipens: false
+            - !type:HasMatchingHealItemPrecondition
+              self: true
+              allowKits: true
+              allowMedipens: false
+          operator: !type:SelectHealItemOperator
+            self: true
+            allowKits: true
+            allowMedipens: false
+
+        - !type:HTNPrimitiveTask
+          operator: !type:UseHealItemOperator
+            stowAfter: true
+
+# Out of combat: heal nearby faction ally with kits.
+- type: htnCompound
+  id: HealAllyKitCompound
+  branches:
+    - tasks:
+        - !type:HTNPrimitiveTask
+          operator: !type:PickHealTargetOperator
+            self: false
+
+        - !type:HTNPrimitiveTask
+          preconditions:
+            - !type:NeedsTreatableHealPrecondition
+              self: false
+              allowKits: true
+              allowMedipens: false
+            - !type:HasMatchingHealItemPrecondition
+              self: false
+              allowKits: true
+              allowMedipens: false
+          operator: !type:SelectHealItemOperator
+            self: false
+            allowKits: true
+            allowMedipens: false
+
+        - !type:HTNPrimitiveTask
+          operator: !type:MoveToOperator
+            pathfindInPlanning: true
+            removeKeyOnFinish: false
+            targetKey: TargetCoordinates
+            pathfindKey: TargetPathfind
+            rangeKey: InteractRange
+
+        - !type:HTNPrimitiveTask
+          operator: !type:UseHealItemOperator
+            stowAfter: true
+
+# Obtain a defibrillator: already owned, or loot from floor / wall cabinet.
+- type: htnCompound
+  id: ObtainDefibCompound
+  branches:
+    - tasks:
+        - !type:HTNPrimitiveTask
+          operator: !type:SelectDefibOperator
+            ownedOnly: true
+    - tasks:
+        - !type:HTNPrimitiveTask
+          operator: !type:SelectDefibOperator
+            ownedOnly: false
+
+        - !type:HTNPrimitiveTask
+          operator: !type:MoveToOperator
+            pathfindInPlanning: true
+            removeKeyOnFinish: false
+            targetKey: TargetCoordinates
+            pathfindKey: TargetPathfind
+            rangeKey: InteractRange
+
+        - !type:HTNPrimitiveTask
+          operator: !type:PickupDefibOperator
+
+# Heal a dead faction ally with kits only (medipens do nothing on corpses).
+# Requires a defib owned or nearby (gated by PickRevivableCorpseOperator).
+- type: htnCompound
+  id: HealDeadAllyKitCompound
+  branches:
+    - tasks:
+        - !type:HTNPrimitiveTask
+          operator: !type:PickRevivableCorpseOperator
+
+        - !type:HTNPrimitiveTask
+          preconditions:
+            - !type:NeedsCorpseKitHealPrecondition
+            - !type:NeedsTreatableHealPrecondition
+              self: false
+              allowKits: true
+              allowMedipens: false
+              allowDead: true
+            - !type:HasMatchingHealItemPrecondition
+              self: false
+              allowKits: true
+              allowMedipens: false
+              allowDead: true
+          operator: !type:SelectHealItemOperator
+            self: false
+            allowKits: true
+            allowMedipens: false
+            allowDead: true
+
+        - !type:HTNPrimitiveTask
+          operator: !type:MoveToOperator
+            pathfindInPlanning: true
+            removeKeyOnFinish: false
+            targetKey: TargetCoordinates
+            pathfindKey: TargetPathfind
+            rangeKey: InteractRange
+
+        - !type:HTNPrimitiveTask
+          operator: !type:UseHealItemOperator
+            stowAfter: true
+
+# Defibrillate a healed corpse when damage is below the revive threshold.
+- type: htnCompound
+  id: DefibAllyCompound
+  branches:
+    - tasks:
+        - !type:HTNPrimitiveTask
+          operator: !type:PickRevivableCorpseOperator
+
+        - !type:HTNPrimitiveTask
+          preconditions:
+            - !type:CanDefibAllyPrecondition
+          operator: !type:RetargetHealPatientOperator
+
+        - !type:HTNCompoundTask
+          task: ObtainDefibCompound
+
+        - !type:HTNPrimitiveTask
+          operator: !type:RetargetHealPatientOperator
+
+        - !type:HTNPrimitiveTask
+          operator: !type:MoveToOperator
+            pathfindInPlanning: true
+            removeKeyOnFinish: false
+            targetKey: TargetCoordinates
+            pathfindKey: TargetPathfind
+            rangeKey: InteractRange
+
+        - !type:HTNPrimitiveTask
+          operator: !type:UseDefibOperator
+
+# Drop spent recognized medipens.
+- type: htnCompound
+  id: DiscardEmptyMedipenCompound
+  branches:
+    - preconditions:
+        - !type:HasEmptyMedipenPrecondition
+      tasks:
+        - !type:HTNPrimitiveTask
+          operator: !type:DiscardEmptyMedipenOperator

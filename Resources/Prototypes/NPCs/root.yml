@@ -82,29 +82,4 @@
         - !type:HTNCompoundTask
           task: IdleCompound
 
-- type: htnCompound
-  id: SimpleHumanoidHostileCompound
-  branches:
-    # In melee with no usable cover: sometimes close for melee instead of kiting.
-    - preconditions:
-        - !type:PreferCloseMeleePrecondition
-      tasks:
-        - !type:HTNCompoundTask
-          task: MeleeCombatCompound
-    - tasks:
-        - !type:HTNCompoundTask
-          task: RangedCombatCompound
-    - tasks:
-        - !type:HTNCompoundTask
-          task: MeleeCombatCompound
-    # Outside combat: keep the squad gathered around the shared rally point.
-    - tasks:
-        - !type:HTNCompoundTask
-          task: SquadRallyCompound
-    # Holster gun + stow held ammo after a long stretch without hostiles.
-    - tasks:
-        - !type:HTNCompoundTask
-          task: PeaceStowCompound
-    - tasks:
-        - !type:HTNCompoundTask
-          task: IdleCompound
+# Humanoid hostile agents use HumanoidAgentCompound via SimpleHumanoidHostileCompound alias.

@@ -1,0 +1,32 @@
+<Control xmlns="https://spacestation14.io"
+         xmlns:gfx="clr-namespace:Robust.Client.Graphics;assembly=Robust.Client"
+         MinWidth="360"
+         MaxWidth="560"
+         HorizontalAlignment="Center"
+         VerticalAlignment="Bottom"
+         Margin="0 0 0 12">
+    <PanelContainer>
+        <PanelContainer.PanelOverride>
+            <!-- Classic AngleRect-like panel, slightly translucent. -->
+            <gfx:StyleBoxFlat BackgroundColor="#252725CC"
+                              BorderColor="#3F3F46"
+                              BorderThickness="2" />
+        </PanelContainer.PanelOverride>
+        <BoxContainer Margin="8" Orientation="Vertical" SeparationOverride="6">
+            <Label Name="NpcNameLabel"
+                   StyleClasses="LabelHeading"
+                   HorizontalAlignment="Center"
+                   Align="Center" />
+            <RichTextLabel Name="SpeechLabel"
+                           HorizontalAlignment="Center"
+                           MaxWidth="520" />
+            <BoxContainer Name="OptionsContainer"
+                          Orientation="Horizontal"
+                          HorizontalAlignment="Center"
+                          SeparationOverride="6" />
+            <Button Name="LeaveButton"
+                    Text="{Loc 'npc-dialogue-leave'}"
+                    HorizontalAlignment="Center" />
+        </BoxContainer>
+    </PanelContainer>
+</Control>

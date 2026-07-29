@@ -1,6 +1,7 @@
 using Content.Shared.Gravity;
 using Content.Shared.Maps;
 using Content.Shared.NPC;
+using Content.Shared.Physics;
 using Robust.Shared.Map.Components;
 using Robust.Shared.Spawners;
 
@@ -70,13 +71,13 @@ public sealed partial class PathfindingSystem
             var isDoor = (end.Data.Flags & PathfindingBreadcrumbFlag.Door) != 0x0;
             var isAccess = (end.Data.Flags & PathfindingBreadcrumbFlag.Access) != 0x0;
 
-            // TODO: Handling power + door prying
-            // Door we should be able to open
+            // Non-access doors: cheap interact open.
+            // Access doors stay expensive (pry/smash) — PathFlags.Access is not entity-aware,
+            // so treating them as free makes NPCs path into locked doors and "dance".
             if (isDoor && !isAccess && (request.Flags & PathFlags.Interact) != 0x0)
             {
                 modifier += 0.5f;
             }
-            // Door we can force open one way or another
             else if (isDoor && isAccess && (request.Flags & PathFlags.Prying) != 0x0)
             {
                 modifier += 10f;
@@ -86,8 +87,17 @@ public sealed partial class PathfindingSystem
             {
                 modifier += 0.5f;
             }
+            else if (isDoor && (request.Flags & PathFlags.Smashing) != 0x0 && end.Data.Damage > 0f)
+            {
+                modifier += 15f + end.Data.Damage / 100f;
+            }
             else if ((request.Flags & PathFlags.Smashing) != 0x0 && end.Data.Damage > 0f)
             {
+                // Glass/windows use GlassLayer (Impassable, no Opaque). NPCs may SEE through
+                // them via Opaque LOS, but must never path/smash through as a route.
+                if ((end.Data.CollisionLayer & (int) CollisionGroup.Opaque) == 0x0)
+                    return 0f;
+
                 modifier += 10f + end.Data.Damage / 100f;
             }
             else

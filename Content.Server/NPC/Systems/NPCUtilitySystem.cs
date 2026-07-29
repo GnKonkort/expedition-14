@@ -1,6 +1,7 @@
 using Content.Server.Atmos.Components;
 using Content.Server.Fluids.EntitySystems;
 using Content.Server.Hands.Systems;
+using Content.Server.Interaction;
 using Content.Server.NPC.Queries;
 using Content.Server.NPC.Queries.Considerations;
 using Content.Server.NPC.Queries.Curves;
@@ -11,7 +12,6 @@ using Content.Server.Storage.Components;
 using Content.Server.Temperature.Components;
 using Content.Shared.Chemistry.EntitySystems;
 using Content.Shared.Damage;
-using Content.Shared.Examine;
 using Content.Shared.Fluids.Components;
 using Content.Shared.Hands.Components;
 using Content.Shared.Inventory;
@@ -20,6 +20,7 @@ using Content.Shared.Mobs.Systems;
 using Content.Shared.NPC.Systems;
 using Content.Shared.Nutrition.Components;
 using Content.Shared.Nutrition.EntitySystems;
+using Content.Shared.Physics;
 using Content.Shared.Stunnable;
 using Content.Shared.Tools.Systems;
 using Content.Shared.Turrets;
@@ -54,7 +55,7 @@ public sealed class NPCUtilitySystem : EntitySystem
     [Dependency] private readonly SharedTransformSystem _transform = default!;
     [Dependency] private readonly SharedSolutionContainerSystem _solutions = default!;
     [Dependency] private readonly WeldableSystem _weldable = default!;
-    [Dependency] private readonly ExamineSystemShared _examine = default!;
+    [Dependency] private readonly InteractionSystem _interaction = default!;
     [Dependency] private readonly EntityWhitelistSystem _whitelistSystem = default!;
     [Dependency] private readonly MobThresholdSystem _thresholdSystem = default!;
     [Dependency] private readonly TurretTargetSettingsSystem _turretTargetSettings = default!;
@@ -360,7 +361,8 @@ public sealed class NPCUtilitySystem : EntitySystem
             {
                 var radius = blackboard.GetValueOrDefault<float>(blackboard.GetVisionRadiusKey(EntityManager), EntityManager);
 
-                return _examine.InRangeUnOccluded(owner, targetUid, radius + 0.5f, null) ? 1f : 0f;
+                // Opaque only — glass/windows (GlassLayer) must not block NPC vision.
+                return _interaction.InRangeUnobstructed(owner, targetUid, radius + 0.5f, CollisionGroup.Opaque) ? 1f : 0f;
             }
             case TargetInLOSOrCurrentCon:
             {
@@ -377,7 +379,7 @@ public sealed class NPCUtilitySystem : EntitySystem
                     return 1f;
                 }
 
-                return _examine.InRangeUnOccluded(owner, targetUid, radius + bufferRange, null) ? 1f : 0f;
+                return _interaction.InRangeUnobstructed(owner, targetUid, radius + bufferRange, CollisionGroup.Opaque) ? 1f : 0f;
             }
             case TargetIsAliveCon:
             {

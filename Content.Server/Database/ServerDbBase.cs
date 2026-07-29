@@ -1879,6 +1879,79 @@ INSERT INTO player_round (players_id, rounds_id) VALUES ({players[player]}, {id}
 
         #endregion
 
+        #region NPC Presets
+
+        public async Task<List<NpcPreset>> GetNpcPresetsAsync(CancellationToken cancel = default)
+        {
+            await using var db = await GetDb(cancel);
+            return await db.DbContext.NpcPreset
+                .OrderBy(p => p.Name)
+                .ToListAsync(cancel);
+        }
+
+        public async Task<NpcPreset?> GetNpcPresetAsync(int id, CancellationToken cancel = default)
+        {
+            await using var db = await GetDb(cancel);
+            return await db.DbContext.NpcPreset.SingleOrDefaultAsync(p => p.Id == id, cancel);
+        }
+
+        public async Task<NpcPreset?> GetNpcPresetByNameAsync(string name, CancellationToken cancel = default)
+        {
+            await using var db = await GetDb(cancel);
+            return await db.DbContext.NpcPreset.SingleOrDefaultAsync(p => p.Name == name, cancel);
+        }
+
+        public async Task<int> UpsertNpcPresetAsync(string name, string createdBy, string dataYaml, int? existingId = null)
+        {
+            await using var db = await GetDb();
+            var now = DateTime.UtcNow;
+
+            NpcPreset? preset = null;
+            if (existingId != null)
+            {
+                preset = await db.DbContext.NpcPreset.SingleOrDefaultAsync(p => p.Id == existingId.Value);
+            }
+
+            preset ??= await db.DbContext.NpcPreset.SingleOrDefaultAsync(p => p.Name == name);
+
+            if (preset == null)
+            {
+                preset = new NpcPreset
+                {
+                    Name = name,
+                    CreatedBy = createdBy,
+                    CreatedAt = now,
+                    UpdatedAt = now,
+                    Data = dataYaml,
+                };
+                db.DbContext.NpcPreset.Add(preset);
+            }
+            else
+            {
+                preset.Name = name;
+                preset.CreatedBy = createdBy;
+                preset.UpdatedAt = now;
+                preset.Data = dataYaml;
+            }
+
+            await db.DbContext.SaveChangesAsync();
+            return preset.Id;
+        }
+
+        public async Task<bool> DeleteNpcPresetAsync(int id)
+        {
+            await using var db = await GetDb();
+            var preset = await db.DbContext.NpcPreset.SingleOrDefaultAsync(p => p.Id == id);
+            if (preset == null)
+                return false;
+
+            db.DbContext.NpcPreset.Remove(preset);
+            await db.DbContext.SaveChangesAsync();
+            return true;
+        }
+
+        #endregion
+
         public abstract Task SendNotification(DatabaseNotification notification);
 
         // SQLite returns DateTime as Kind=Unspecified, Npgsql actually knows for sure it's Kind=Utc.

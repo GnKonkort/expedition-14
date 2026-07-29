@@ -1,0 +1,197 @@
+# Crew-like capability compounds (Phase 7).
+
+- type: htnCompound
+  id: RepairCompound
+  branches:
+    - tasks:
+        - !type:HTNPrimitiveTask
+          operator: !type:PickRepairTargetOperator
+
+        - !type:HTNPrimitiveTask
+          operator: !type:MoveToOperator
+            pathfindInPlanning: true
+            removeKeyOnFinish: false
+            targetKey: TargetCoordinates
+            rangeKey: InteractRange
+
+        - !type:HTNPrimitiveTask
+          preconditions:
+            - !type:TargetInRangePrecondition
+              targetKey: RepairTarget
+              rangeKey: InteractRange
+          operator: !type:RepairTargetOperator
+
+- type: htnCompound
+  id: TriageCompound
+  branches:
+    - tasks:
+        - !type:HTNPrimitiveTask
+          operator: !type:PickTriagePatientOperator
+
+        - !type:HTNCompoundTask
+          task: HealDeadAllyKitCompound
+
+    - tasks:
+        - !type:HTNPrimitiveTask
+          operator: !type:PickTriagePatientOperator
+
+        - !type:HTNCompoundTask
+          task: DefibAllyCompound
+
+    - tasks:
+        - !type:HTNPrimitiveTask
+          operator: !type:PickTriagePatientOperator
+
+        - !type:HTNCompoundTask
+          task: CombatMedipenAllyCompound
+
+    - tasks:
+        - !type:HTNPrimitiveTask
+          operator: !type:PickTriagePatientOperator
+
+        - !type:HTNCompoundTask
+          task: HealAllyKitCompound
+
+    - tasks:
+        - !type:HTNPrimitiveTask
+          operator: !type:PickTriagePatientOperator
+
+        - !type:HTNCompoundTask
+          task: HealSelfKitCompound
+
+- type: htnCompound
+  id: ArrestCompound
+  branches:
+    - tasks:
+        - !type:HTNPrimitiveTask
+          operator: !type:PickArrestTargetOperator
+
+        - !type:HTNPrimitiveTask
+          operator: !type:MoveToOperator
+            pathfindInPlanning: true
+            removeKeyOnFinish: false
+            targetKey: TargetCoordinates
+            rangeKey: InteractRange
+
+        - !type:HTNPrimitiveTask
+          preconditions:
+            - !type:TargetInRangePrecondition
+              targetKey: ArrestTarget
+              rangeKey: InteractRange
+          operator: !type:ArrestTargetOperator
+
+# Medic: survival → triage/medical → inventory → light self-defense → idle
+- type: htnCompound
+  id: HumanoidMedicCompound
+  branches:
+    - tasks:
+        - !type:HTNCompoundTask
+          task: AtmosFleeCompound
+    - tasks:
+        - !type:HTNCompoundTask
+          task: WaitHealDoAfterCompound
+    - tasks:
+        - !type:HTNCompoundTask
+          task: WaitDefibDoAfterCompound
+    - tasks:
+        - !type:HTNCompoundTask
+          task: TriageCompound
+    - tasks:
+        - !type:HTNCompoundTask
+          task: HealSelfKitCompound
+    - tasks:
+        - !type:HTNCompoundTask
+          task: DiscardEmptyMedipenCompound
+    - tasks:
+        - !type:HTNCompoundTask
+          task: InventoryManageCompound
+    - tasks:
+        - !type:HTNCompoundTask
+          task: FoodCompound
+    - preconditions:
+        - !type:NearbyHostilesPrecondition
+          rangeKey: MeleeRange
+      tasks:
+        - !type:HTNCompoundTask
+          task: MeleeCombatCompound
+    - tasks:
+        - !type:HTNCompoundTask
+          task: IdleCompound
+
+# Engineer: survival → access → repair → inventory → light defense → idle
+- type: htnCompound
+  id: HumanoidEngineerCompound
+  branches:
+    - tasks:
+        - !type:HTNCompoundTask
+          task: AtmosFleeCompound
+    - tasks:
+        - !type:HTNCompoundTask
+          task: AccessBypassCompound
+    - tasks:
+        - !type:HTNCompoundTask
+          task: RepairCompound
+    - tasks:
+        - !type:HTNCompoundTask
+          task: InventoryManageCompound
+    - tasks:
+        - !type:HTNCompoundTask
+          task: FoodCompound
+    - preconditions:
+        - !type:NearbyHostilesPrecondition
+          rangeKey: MeleeRange
+      tasks:
+        - !type:HTNCompoundTask
+          task: MeleeCombatCompound
+    - tasks:
+        - !type:HTNCompoundTask
+          task: IdleCompound
+
+# Security: survival → arrest → combat → support → idle
+- type: htnCompound
+  id: HumanoidSecurityCompound
+  branches:
+    - tasks:
+        - !type:HTNCompoundTask
+          task: AtmosFleeCompound
+    - tasks:
+        - !type:HTNCompoundTask
+          task: WaitHealDoAfterCompound
+    - tasks:
+        - !type:HTNCompoundTask
+          task: InventoryPolicyCompound
+    - tasks:
+        - !type:HTNCompoundTask
+          task: ArrestCompound
+    - preconditions:
+        - !type:PreferCloseMeleePrecondition
+      tasks:
+        - !type:HTNCompoundTask
+          task: MeleeCombatCompound
+    - tasks:
+        - !type:HTNCompoundTask
+          task: RangedCombatCompound
+    - tasks:
+        - !type:HTNCompoundTask
+          task: MeleeCombatCompound
+    - tasks:
+        - !type:HTNCompoundTask
+          task: HealSelfKitCompound
+    - tasks:
+        - !type:HTNCompoundTask
+          task: InventoryManageCompound
+    - tasks:
+        - !type:HTNCompoundTask
+          task: FoodCompound
+    - tasks:
+        - !type:HTNCompoundTask
+          task: AccessBypassCompound
+    - tasks:
+        - !type:HTNCompoundTask
+          task: SquadRallyCompound
+    - tasks:
+        - !type:HTNCompoundTask
+          task: PeaceStowCompound
+    - tasks:
+        - !type:HTNCompoundTask
+          task: IdleCompound

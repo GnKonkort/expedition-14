@@ -30,6 +30,9 @@ public sealed partial class ThrowGrenadeAtTargetOperator : HTNOperator
         if (!grenades.IsThrowOpportunityReady(owner, target, blackboard))
             return (false, null);
 
+        if (!grenades.IsThrowSafe(owner, target))
+            return (false, null);
+
         if (!grenades.ShouldAttemptThrow(owner, blackboard))
             return (false, null);
 

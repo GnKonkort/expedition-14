@@ -40,6 +40,10 @@ public sealed partial class PickAccessibleOperator : HTNOperator
 
         blackboard.TryGetValue<float>(RangeKey, out var maxRange, _entManager);
 
+        // Explicitly disabled idle roaming (custom NPC stand / no-wander).
+        if (blackboard.TryGetValue<bool>(NPCBlackboard.IdleWander, out var wander, _entManager) && !wander)
+            return (false, null);
+
         if (maxRange == 0f)
             maxRange = 7f;
 

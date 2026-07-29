@@ -1,0 +1,127 @@
+<DefaultWindow xmlns="https://spacestation14.io"
+               Title="{Loc 'npc-editor-title'}"
+               MinSize="820 580"
+               SetSize="880 620">
+    <BoxContainer Orientation="Vertical" SeparationOverride="6">
+        <TabContainer Name="Tabs" VerticalExpand="True">
+            <!-- Appearance -->
+            <BoxContainer Name="AppearanceTab" Orientation="Vertical" SeparationOverride="4">
+                <Label Text="{Loc 'npc-editor-appearance'}" StyleClasses="LabelHeading" />
+                <BoxContainer Orientation="Horizontal">
+                    <Label Text="{Loc 'npc-editor-name'}" MinWidth="120" />
+                    <LineEdit Name="NameEdit" HorizontalExpand="True" />
+                </BoxContainer>
+                <BoxContainer Orientation="Horizontal">
+                    <Label Text="{Loc 'npc-editor-species'}" MinWidth="120" />
+                    <OptionButton Name="SpeciesOption" HorizontalExpand="True" />
+                </BoxContainer>
+                <CheckBox Name="RandomAppearanceCheck" Text="{Loc 'npc-editor-random-appearance'}" />
+                <BoxContainer Orientation="Horizontal" SeparationOverride="6">
+                    <Button Name="EditAppearanceButton" Text="{Loc 'npc-editor-edit-appearance'}" />
+                    <Button Name="RandomizeAppearanceButton" Text="{Loc 'npc-editor-randomize-appearance'}" />
+                    <Label Name="AppearanceStatusLabel" StyleClasses="LabelSubText" />
+                </BoxContainer>
+            </BoxContainer>
+
+            <!-- Behavior -->
+            <BoxContainer Name="BehaviorTab" Orientation="Vertical" SeparationOverride="4">
+                <Label Text="{Loc 'npc-editor-behavior'}" StyleClasses="LabelHeading" />
+                <BoxContainer Orientation="Horizontal">
+                    <Label Text="{Loc 'npc-editor-pack'}" MinWidth="120" />
+                    <OptionButton Name="PackOption" HorizontalExpand="True" />
+                </BoxContainer>
+                <BoxContainer Orientation="Horizontal">
+                    <Label Text="{Loc 'npc-editor-htn'}" MinWidth="120" />
+                    <OptionButton Name="HtnOption" HorizontalExpand="True" />
+                </BoxContainer>
+                <BoxContainer Orientation="Horizontal">
+                    <Label Text="{Loc 'npc-editor-role'}" MinWidth="120" />
+                    <OptionButton Name="RoleOption" HorizontalExpand="True" />
+                </BoxContainer>
+                <CheckBox Name="NavClimbCheck" Text="{Loc 'npc-editor-nav-climb'}" />
+                <CheckBox Name="NavInteractCheck" Text="{Loc 'npc-editor-nav-interact'}" />
+                <CheckBox Name="NavPryCheck" Text="{Loc 'npc-editor-nav-pry'}" />
+                <CheckBox Name="NavSmashCheck" Text="{Loc 'npc-editor-nav-smash'}" />
+                <CheckBox Name="JoinSquadCheck" Text="{Loc 'npc-editor-join-squad'}" />
+                <CheckBox Name="AllowWanderCheck" Text="{Loc 'npc-editor-allow-wander'}" />
+                <CheckBox Name="UseStandPointCheck" Text="{Loc 'npc-editor-use-stand-point'}" />
+                <Label Text="{Loc 'npc-editor-stand-point-hint'}" StyleClasses="LabelSubText" />
+            </BoxContainer>
+
+            <!-- Dialogue editor -->
+            <BoxContainer Name="DialogueTab" Orientation="Vertical" SeparationOverride="4">
+                <Label Text="{Loc 'npc-editor-dialogue'}" StyleClasses="LabelHeading" />
+                <BoxContainer Orientation="Horizontal" SeparationOverride="4">
+                    <Label Text="{Loc 'npc-editor-dialogue-template'}" MinWidth="120" />
+                    <OptionButton Name="DialogueTemplateOption" HorizontalExpand="True" />
+                    <Button Name="LoadDialogueTemplateButton" Text="{Loc 'npc-editor-dialogue-load-template'}" />
+                    <Button Name="ClearDialogueButton" Text="{Loc 'npc-editor-dialogue-clear'}" />
+                </BoxContainer>
+                <BoxContainer Orientation="Horizontal">
+                    <Label Text="{Loc 'npc-editor-dialogue-start'}" MinWidth="120" />
+                    <LineEdit Name="DialogueStartEdit" HorizontalExpand="True" />
+                </BoxContainer>
+                <BoxContainer Orientation="Horizontal" VerticalExpand="True" SeparationOverride="6">
+                    <BoxContainer Orientation="Vertical" MinWidth="180" VerticalExpand="True">
+                        <Label Text="{Loc 'npc-editor-dialogue-nodes'}" />
+                        <ItemList Name="DialogueNodeList" SelectMode="Single" VerticalExpand="True" />
+                        <BoxContainer Orientation="Horizontal">
+                            <LineEdit Name="NewNodeIdEdit" PlaceHolder="{Loc 'npc-editor-dialogue-new-node'}" HorizontalExpand="True" />
+                            <Button Name="AddNodeButton" Text="{Loc 'npc-editor-dialogue-add-node'}" />
+                        </BoxContainer>
+                        <Button Name="RemoveNodeButton" Text="{Loc 'npc-editor-dialogue-remove-node'}" />
+                    </BoxContainer>
+                    <BoxContainer Orientation="Vertical" HorizontalExpand="True" VerticalExpand="True" SeparationOverride="4">
+                        <Label Text="{Loc 'npc-editor-dialogue-speech'}" />
+                        <TextEdit Name="DialogueSpeechEdit" MinHeight="80" HorizontalExpand="True" />
+                        <Label Text="{Loc 'npc-editor-dialogue-options'}" />
+                        <ItemList Name="DialogueOptionList" SelectMode="Single" VerticalExpand="True" MinHeight="100" />
+                        <BoxContainer Orientation="Horizontal" SeparationOverride="4">
+                            <LineEdit Name="OptionTextEdit" PlaceHolder="{Loc 'npc-editor-dialogue-option-text'}" HorizontalExpand="True" />
+                            <LineEdit Name="OptionNextEdit" PlaceHolder="{Loc 'npc-editor-dialogue-option-next'}" MinWidth="120" />
+                            <Button Name="AddOptionButton" Text="{Loc 'npc-editor-dialogue-add-option'}" />
+                            <Button Name="RemoveOptionButton" Text="{Loc 'npc-editor-dialogue-remove-option'}" />
+                        </BoxContainer>
+                        <Label Text="{Loc 'npc-editor-dialogue-hint'}" StyleClasses="LabelSubText" />
+                    </BoxContainer>
+                </BoxContainer>
+            </BoxContainer>
+
+            <!-- Faction -->
+            <BoxContainer Name="FactionTab" Orientation="Vertical" SeparationOverride="4">
+                <Label Text="{Loc 'npc-editor-faction'}" StyleClasses="LabelHeading" />
+                <Label Text="{Loc 'npc-editor-faction-primary'}" />
+                <ItemList Name="FactionList" SelectMode="Multiple" VerticalExpand="True" MinHeight="180" />
+                <Label Text="{Loc 'npc-editor-faction-add-hostile'}" />
+                <LineEdit Name="AddHostileEdit" PlaceHolder="{Loc 'npc-editor-faction-csv-placeholder'}" />
+                <Label Text="{Loc 'npc-editor-faction-add-friendly'}" />
+                <LineEdit Name="AddFriendlyEdit" PlaceHolder="{Loc 'npc-editor-faction-csv-placeholder'}" />
+            </BoxContainer>
+
+            <!-- Gear -->
+            <BoxContainer Name="GearTab" Orientation="Vertical" SeparationOverride="4">
+                <Label Text="{Loc 'npc-editor-gear'}" StyleClasses="LabelHeading" />
+                <LineEdit Name="GearSearch" PlaceHolder="{Loc 'npc-editor-search'}" />
+                <ItemList Name="GearList" SelectMode="Single" VerticalExpand="True" />
+            </BoxContainer>
+
+            <!-- Presets -->
+            <BoxContainer Name="PresetTab" Orientation="Vertical" SeparationOverride="4">
+                <Label Text="{Loc 'npc-editor-presets'}" StyleClasses="LabelHeading" />
+                <BoxContainer Orientation="Horizontal">
+                    <LineEdit Name="PresetNameEdit" PlaceHolder="{Loc 'npc-editor-preset-name'}" HorizontalExpand="True" />
+                    <Button Name="SavePresetButton" Text="{Loc 'npc-editor-save'}" />
+                    <Button Name="DeletePresetButton" Text="{Loc 'npc-editor-delete'}" />
+                </BoxContainer>
+                <ItemList Name="PresetList" SelectMode="Single" VerticalExpand="True" />
+                <Button Name="LoadPresetButton" Text="{Loc 'npc-editor-load'}" HorizontalExpand="True" />
+            </BoxContainer>
+        </TabContainer>
+
+        <BoxContainer Orientation="Horizontal" SeparationOverride="6">
+            <Button Name="SpawnButton" Text="{Loc 'npc-editor-spawn'}" HorizontalExpand="True" />
+            <Button Name="ApplyButton" Text="{Loc 'npc-editor-apply'}" HorizontalExpand="True" />
+            <Button Name="RefreshButton" Text="{Loc 'npc-editor-refresh'}" />
+        </BoxContainer>
+    </BoxContainer>
+</DefaultWindow>

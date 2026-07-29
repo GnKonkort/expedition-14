@@ -46,13 +46,16 @@ namespace Content.Server.GameTicking
                     AddPlayerToDb(args.Session.UserId.UserId);
 
                     // Always make sure the client has player data.
+                    // Assign before any awaits so InGame/admin login cannot race a null ContentData.
                     if (session.Data.ContentDataUncast == null)
                     {
                         var data = new ContentPlayerData(session.UserId, args.Session.Name);
                         data.Mind = mindId;
-                        data.Whitelisted = await _db.GetWhitelistStatusAsync(session.UserId); // Nyanotrasen - Whitelist
                         session.Data.ContentDataUncast = data;
                     }
+
+                    var contentData = session.ContentData()!;
+                    contentData.Whitelisted = await _db.GetWhitelistStatusAsync(session.UserId); // Nyanotrasen - Whitelist
 
                     // Make the player actually join the game.
                     // timer time must be > tick length

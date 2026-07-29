@@ -1,0 +1,10 @@
+# Inventory logistics: pick useful gear, drop junk, upgrade backpacks.
+
+- type: htnCompound
+  id: InventoryManageCompound
+  branches:
+    - preconditions:
+        - !type:InventoryManageNeededPrecondition
+      tasks:
+        - !type:HTNPrimitiveTask
+          operator: !type:ManageInventoryOperator

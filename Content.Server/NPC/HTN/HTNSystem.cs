@@ -7,9 +7,11 @@ using Robust.Shared.CPUJob.JobQueues.Queues;
 using Content.Server.NPC.HTN.PrimitiveTasks;
 using Content.Server.NPC.Systems;
 using Content.Shared.Administration;
+using Content.Shared.CCVar;
 using Content.Shared.Mobs;
 using Content.Shared.NPC;
 using JetBrains.Annotations;
+using Robust.Shared.Configuration;
 using Robust.Shared.Player;
 using Robust.Shared.Prototypes;
 using Robust.Shared.Utility;
@@ -23,6 +25,7 @@ namespace Content.Server.NPC.HTN;
 public sealed class HTNSystem : EntitySystem
 {
     [Dependency] private readonly IAdminManager _admin = default!;
+    [Dependency] private readonly IConfigurationManager _cfg = default!;
     [Dependency] private readonly IPrototypeManager _prototypeManager = default!;
     [Dependency] private readonly NPCSystem _npc = default!;
     [Dependency] private readonly NPCUtilitySystem _utility = default!;
@@ -33,7 +36,7 @@ public sealed class HTNSystem : EntitySystem
     private EntityQuery<LoadedChunkComponent> _loadedQuery;
     // Frontier
 
-    private readonly JobQueue _planQueue = new(0.004);
+    private JobQueue _planQueue = new(0.008);
 
     private readonly HashSet<ICommonSession> _subscribers = new();
 
@@ -43,6 +46,8 @@ public sealed class HTNSystem : EntitySystem
         base.Initialize();
         _mapQuery = GetEntityQuery<WorldControllerComponent>(); // Frontier
         _loadedQuery = GetEntityQuery<LoadedChunkComponent>(); // Frontier
+        _planQueue = new(_cfg.GetCVar(CCVars.NPCPlanQueueSeconds));
+        Subs.CVar(_cfg, CCVars.NPCPlanQueueSeconds, v => _planQueue = new(v));
         SubscribeLocalEvent<HTNComponent, MobStateChangedEvent>(_npc.OnMobStateChange);
         SubscribeLocalEvent<HTNComponent, MapInitEvent>(_npc.OnNPCMapInit);
         SubscribeLocalEvent<HTNComponent, PlayerAttachedEvent>(_npc.OnPlayerNPCAttach);
@@ -221,11 +226,13 @@ public sealed class HTNSystem : EntitySystem
             {
                 if (comp.PlanningJob.Exception != null)
                 {
-                    Log.Fatal($"Received exception on planning job for {uid}!");
+                    // Do not rethrow — a bad HTN prototype (e.g. hot-reload race) must not kill the server.
+                    Log.Error($"HTN planning failed for {ToPrettyString(uid)}: {comp.PlanningJob.Exception}");
+                    comp.PlanningJob = null;
+                    comp.Plan = null;
                     _npc.SleepNPC(uid);
-                    var exc = comp.PlanningJob.Exception;
                     RemComp<HTNComponent>(uid);
-                    throw exc;
+                    continue;
                 }
 
                 // If a new planning job has finished then handle it.

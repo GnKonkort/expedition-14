@@ -125,7 +125,8 @@ public sealed partial class NPCSteeringSystem
         // TODO: Need something uhh better not sure on the interaction between these.
         if (!steering.ForceMove && steering.ArriveOnLineOfSight)
         {
-            // TODO: use vision range
+            // Arrive-on-LOS for movement: Impassable — glass is still a physical barrier to walk into.
+            // Vision/shooting uses Opaque separately so NPCs can still see targets through windows.
             inLos = _interaction.InRangeUnobstructed(uid, steering.Coordinates, 10f);
 
             if (inLos)
@@ -239,15 +240,16 @@ public sealed partial class NPCSteeringSystem
                 lock (_obstacles)
                 {
                     var isClimbNode = (node.Data.Flags & PathfindingBreadcrumbFlag.Climb) != 0x0;
+                    var isDoorNode = (node.Data.Flags & PathfindingBreadcrumbFlag.Door) != 0x0;
 
-                    // Must come to a full stop before vault — seeking while "waiting" caused run-loops
-                    // and BreakOnMove cancelled the progress bar.
+                    // Must come to a full stop before vault/door handling — seeking while "waiting"
+                    // dances into frames and BreakOnMove cancels pry/vault progress bars.
                     if (body.LinearVelocity.LengthSquared() > 0.01f)
                     {
-                        if (isClimbNode)
+                        if (isClimbNode || isDoorNode)
                         {
                             ClimbDebug(uid,
-                                $"WAIT-STOP climb-node vel={body.LinearVelocity.Length():F2} dist={direction.Length():F2} flags={steering.Flags}");
+                                $"WAIT-STOP {(isClimbNode ? "climb" : "door")}-node vel={body.LinearVelocity.Length():F2} dist={direction.Length():F2} flags={steering.Flags}");
                             HoldStillForClimb(uid, mover, steering, interest);
                         }
 
@@ -255,7 +257,7 @@ public sealed partial class NPCSteeringSystem
                     }
 
                     ClimbDebug(uid,
-                        $"HANDLE obstacle climb={isClimbNode} door={(node.Data.Flags & PathfindingBreadcrumbFlag.Door) != 0} ents-pending flags={steering.Flags} pathLeft={steering.CurrentPath.Count}");
+                        $"HANDLE obstacle climb={isClimbNode} door={isDoorNode} ents-pending flags={steering.Flags} pathLeft={steering.CurrentPath.Count}");
                     status = TryHandleFlags(uid, steering, node);
                     ClimbDebug(uid, $"HANDLE result={status} doAfter={steering.DoAfterId != null}");
                 }

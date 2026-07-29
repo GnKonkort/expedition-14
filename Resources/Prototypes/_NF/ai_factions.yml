@@ -1,5 +1,6 @@
 - type: npcFaction
   id: Pibble
+  category: Wildlife
   hostile:
   - Mouse
   - Xeno
@@ -30,34 +31,43 @@
 
 - type: npcFaction
   id: Dwarf
+  category: Civilian
 
 - type: npcFaction
   id: Felinid
+  category: Civilian
 
 - type: npcFaction
   id: Harpy
+  category: Civilian
 
 - type: npcFaction
   id: Cat
+  category: Wildlife
   hostile:
   - Mouse
 
 - type: npcFaction
   id: Chicken
+  category: Wildlife
 
 - type: npcFaction
   id: Monkey
+  category: Wildlife
 
 - type: npcFaction
   id: Goblin
+  category: Wildlife
 
 - type: npcFaction
   id: NFSyndicate
+  category: Antag
   friendly:
   - Syndicate
   hostile:
   ## SS14 factions
   - NanoTrasen
+  - CrewCivilian
   #- Syndicate
   - SimpleHostile
   - SimpleNeutral
@@ -88,9 +98,11 @@
 
 - type: npcFaction
   id: WizFedFaction
+  category: Antag
   hostile:
   ## SS14 factions
   - NanoTrasen
+  - CrewCivilian
   - Syndicate
   - SimpleHostile
   - SimpleNeutral
@@ -121,9 +133,11 @@
 
 - type: npcFaction
   id: BloodCultNF
+  category: Antag
   hostile:
   ## SS14 factions
   - NanoTrasen
+  - CrewCivilian
   - Syndicate
   - SimpleHostile
   - SimpleNeutral
@@ -154,9 +168,11 @@
 
 - type: npcFaction
   id: NFPirate
+  category: Antag
   hostile:
   ## SS14 factions
   - NanoTrasen
+  - CrewCivilian
   - Syndicate
   - SimpleHostile
   - SimpleNeutral
@@ -187,9 +203,12 @@
 
 - type: npcFaction
   id: ArtifactConstruct
+  category: Expedition
   hostile:
   ## SS14 factions
   - NanoTrasen
+  - CrewCivilian
+  - Independent
   - Syndicate
   - SimpleHostile
   - SimpleNeutral
@@ -220,9 +239,11 @@
 
 - type: npcFaction
   id: StreetGangNF
+  category: Antag
   hostile:
   ## SS14 factions
   - NanoTrasen
+  - CrewCivilian
   - Syndicate
   - SimpleHostile
   - SimpleNeutral
@@ -253,9 +274,12 @@
 
 - type: npcFaction
   id: DinosaursNF
+  category: Expedition
   hostile:
   ## SS14 factions
   - NanoTrasen
+  - CrewCivilian
+  - Independent
   - Syndicate
   - SimpleHostile
   - SimpleNeutral
@@ -286,9 +310,12 @@
 
 - type: npcFaction
   id: ExplorersExpeditionNF
+  category: Expedition
+  description: Hostile expedition explorers.
   hostile:
   ## SS14 factions
   - NanoTrasen
+  - CrewCivilian
   - Syndicate
   - SimpleHostile
   - SimpleNeutral
@@ -319,9 +346,13 @@
 
 - type: npcFaction
   id: MercenariesExpeditionNF
+  category: Expedition
+  description: Hostile expedition mercenaries.
   hostile:
   ## SS14 factions
   - NanoTrasen
+  - CrewCivilian
+  - Independent
   - Syndicate
   - SimpleHostile
   - SimpleNeutral
@@ -352,9 +383,12 @@
 
 - type: npcFaction
   id: SiliconsExpeditionNF
+  category: Expedition
   hostile:
   ## SS14 factions
   - NanoTrasen
+  - CrewCivilian
+  - Independent
   - Syndicate
   - SimpleHostile
   - SimpleNeutral
@@ -385,9 +419,12 @@
 
 - type: npcFaction
   id: AberrantFleshExpeditionNF
+  category: Expedition
   hostile:
   ## SS14 factions
   - NanoTrasen
+  - CrewCivilian
+  - Independent
   - Syndicate
   - SimpleHostile
   - SimpleNeutral
@@ -418,9 +455,12 @@
 
 - type: npcFaction
   id: ContrabandClothing
+  category: Special
+  editorVisible: false
   hostile:
   ## SS14 factions
   - NanoTrasen
+  - CrewCivilian
   - Syndicate
   - SimpleHostile
   - SimpleNeutral
@@ -451,14 +491,20 @@
 
 - type: npcFaction
   id: ContrabandDetection
+  category: Special
+  editorVisible: false
   hostile:
   - ContrabandClothing
 
 - type: npcFaction
   id: HostileUniversally
+  category: Special
+  editorVisible: false
   hostile:
   ## SS14 factions
   - NanoTrasen
+  - CrewCivilian
+  - Independent
   - Mouse
   - Passive
   - PetsNT

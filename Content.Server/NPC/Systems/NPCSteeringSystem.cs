@@ -20,6 +20,8 @@ using Content.Shared.NPC.Components;
 using Content.Shared.NPC.Systems;
 using Content.Shared.NPC.Events;
 using Content.Shared.Physics;
+using Content.Shared.Prying.Systems;
+using Content.Shared.Tag;
 using Content.Shared.Weapons.Melee;
 using Robust.Shared.Configuration;
 using Robust.Shared.Map;
@@ -27,10 +29,10 @@ using Robust.Shared.Physics;
 using Robust.Shared.Physics.Components;
 using Robust.Shared.Physics.Systems;
 using Robust.Shared.Player;
+using Robust.Shared.Prototypes;
 using Robust.Shared.Random;
 using Robust.Shared.Timing;
 using Robust.Shared.Utility;
-using Content.Shared.Prying.Systems;
 using Microsoft.Extensions.ObjectPool;
 using Prometheus;
 using ClimbingComponent = Content.Shared.Climbing.Components.ClimbingComponent;
@@ -70,6 +72,10 @@ public sealed partial class NPCSteeringSystem : SharedNPCSteeringSystem
     [Dependency] private readonly SharedPhysicsSystem _physics = default!;
     [Dependency] private readonly SharedTransformSystem _transform = default!;
     [Dependency] private readonly SharedCombatModeSystem _combat = default!;
+    [Dependency] private readonly NPCAccessBypassSystem _doorBypass = default!;
+    [Dependency] private readonly TagSystem _tag = default!;
+
+    private static readonly ProtoId<TagPrototype> WindowTag = "Window";
 
     private EntityQuery<FixturesComponent> _fixturesQuery;
     private EntityQuery<MovementSpeedModifierComponent> _modifierQuery;
@@ -90,6 +96,11 @@ public sealed partial class NPCSteeringSystem : SharedNPCSteeringSystem
     private bool _pathfinding = true;
 
     private bool _debugClimb;
+
+    /// <summary>Skip climb-retry pathfind while this cooldown is active (same destination).</summary>
+    private static readonly TimeSpan ClimbNoPathCooldown = TimeSpan.FromSeconds(2);
+
+    private readonly Dictionary<EntityUid, (MapCoordinates Target, TimeSpan Until)> _climbNoPathUntil = new();
 
     public static readonly Vector2[] Directions = new Vector2[InterestDirections];
 
@@ -182,6 +193,7 @@ public sealed partial class NPCSteeringSystem : SharedNPCSteeringSystem
         // Cancel any active pathfinding jobs as they're irrelevant.
         component.PathfindToken?.Cancel();
         component.PathfindToken = null;
+        _climbNoPathUntil.Remove(uid);
     }
 
     /// <summary>
@@ -474,7 +486,8 @@ public sealed partial class NPCSteeringSystem : SharedNPCSteeringSystem
             return;
         }
 
-        steering.PathfindToken = new CancellationTokenSource();
+        var pathToken = new CancellationTokenSource();
+        steering.PathfindToken = pathToken;
 
         var flags = _pathfindingSystem.GetFlags(uid);
         steering.Flags = flags;
@@ -484,36 +497,56 @@ public sealed partial class NPCSteeringSystem : SharedNPCSteeringSystem
             xform.Coordinates,
             steering.Coordinates,
             steering.Range,
-            steering.PathfindToken.Token,
+            pathToken.Token,
             flags);
+
+        // Cancelled / superseded while awaiting (Unregister, repath, shutdown).
+        if (steering.PathfindToken != pathToken || pathToken.IsCancellationRequested || !Exists(uid))
+            return;
 
         // No walk-around route — retry allowing climbables (barricades, tables, railings).
         if (result.Result == PathResult.NoPath && (flags & PathFlags.Climbing) == 0x0)
         {
-            ClimbDebug(uid, $"PATH NoPath without Climbing → retry with Climbing");
-            flags |= PathFlags.Climbing;
-            result = await _pathfindingSystem.GetPathSafe(
-                uid,
-                xform.Coordinates,
-                steering.Coordinates,
-                steering.Range,
-                steering.PathfindToken.Token,
-                flags);
-
-            if (result.Result == PathResult.Path)
+            var destMap = _transform.ToMapCoordinates(steering.Coordinates);
+            if (_climbNoPathUntil.TryGetValue(uid, out var cool) &&
+                cool.Until > _timing.CurTime &&
+                (cool.Target.Position - destMap.Position).LengthSquared() < 0.01f)
             {
-                steering.Flags |= PathFlags.Climbing;
-                if (TryComp<HTNComponent>(uid, out var htn))
-                    htn.Blackboard.SetValue(NPCBlackboard.NavClimb, true);
-                ClimbDebug(uid, $"PATH climb-retry OK nodes={result.Path.Count}");
+                ClimbDebug(uid, "PATH climb-retry SKIP cooldown");
             }
             else
             {
-                ClimbDebug(uid, "PATH climb-retry still NoPath");
+                ClimbDebug(uid, $"PATH NoPath without Climbing → retry with Climbing");
+                flags |= PathFlags.Climbing;
+                result = await _pathfindingSystem.GetPathSafe(
+                    uid,
+                    xform.Coordinates,
+                    steering.Coordinates,
+                    steering.Range,
+                    pathToken.Token,
+                    flags);
+
+                if (steering.PathfindToken != pathToken || pathToken.IsCancellationRequested || !Exists(uid))
+                    return;
+
+                if (result.Result == PathResult.Path)
+                {
+                    steering.Flags |= PathFlags.Climbing;
+                    if (TryComp<HTNComponent>(uid, out var htn))
+                        htn.Blackboard.SetValue(NPCBlackboard.NavClimb, true);
+                    ClimbDebug(uid, $"PATH climb-retry OK nodes={result.Path.Count}");
+                    _climbNoPathUntil.Remove(uid);
+                }
+                else
+                {
+                    ClimbDebug(uid, "PATH climb-retry still NoPath");
+                    _climbNoPathUntil[uid] = (destMap, _timing.CurTime + ClimbNoPathCooldown);
+                }
             }
         }
 
-        steering.PathfindToken = null;
+        if (steering.PathfindToken == pathToken)
+            steering.PathfindToken = null;
 
         if (result.Result == PathResult.NoPath)
         {
