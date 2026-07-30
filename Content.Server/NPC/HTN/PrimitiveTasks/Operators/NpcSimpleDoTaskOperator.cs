@@ -1,31 +1,48 @@
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+using Content.Server.DoAfter;
 using Content.Server.NPC.Systems;
 using Content.Shared.DoAfter;
+using Content.Shared.NPC;
+using Robust.Shared.Audio;
+using Robust.Shared.Audio.Systems;
 
-namespace Content.Server.NPC.HTN.PrimitiveTasks.Operators.Combat.Medical;
+namespace Content.Server.NPC.HTN.PrimitiveTasks.Operators;
 
 /// <summary>
-/// Uses HealItem on HealTarget (kit do-after or medipen inject).
+/// Generic role task: stand still, play SFX, run a DoAfter progress bar, then finish.
+/// Concrete effects (defib/door/repair) are handled by specialized operators; this is the illusion shell.
 /// </summary>
-public sealed partial class UseHealItemOperator : HTNOperator
+public sealed partial class NpcSimpleDoTaskOperator : HTNOperator
 {
     [Dependency] private readonly IEntityManager _entManager = default!;
 
+    private SharedAudioSystem _audio = default!;
     private SharedDoAfterSystem _doAfter = default!;
     private NPCSteeringSystem _steering = default!;
 
     [DataField]
-    public string HealTargetKey = NPCBlackboard.HealTarget;
+    public float Duration = 2.5f;
 
     [DataField]
-    public string HealItemKey = NPCBlackboard.HealItem;
+    public SoundSpecifier? Sound = new SoundPathSpecifier("/Audio/Items/drill_use.ogg");
 
-    private const string CurrentDoAfterKey = "CurrentHealDoAfter";
+    private const string CurrentDoAfterKey = "CurrentSimpleDoTask";
 
     public override void Initialize(IEntitySystemManager sysManager)
     {
         base.Initialize(sysManager);
+        _audio = sysManager.GetEntitySystem<SharedAudioSystem>();
         _doAfter = sysManager.GetEntitySystem<SharedDoAfterSystem>();
         _steering = sysManager.GetEntitySystem<NPCSteeringSystem>();
+    }
+
+    public override async Task<(bool Valid, Dictionary<string, object>? Effects)> Plan(
+        NPCBlackboard blackboard,
+        CancellationToken cancelToken)
+    {
+        return (true, null);
     }
 
     public override void Startup(NPCBlackboard blackboard)
@@ -35,21 +52,11 @@ public sealed partial class UseHealItemOperator : HTNOperator
 
     public override void TaskShutdown(NPCBlackboard blackboard, HTNOperatorStatus status)
     {
-        // Keep item in hand if plan was replaced while kit do-after is running.
-        if (status == HTNOperatorStatus.BetterPlan)
-            return;
-
-        var medical = _entManager.System<NPCMedicalSystem>();
-        var owner = blackboard.GetValue<EntityUid>(NPCBlackboard.Owner);
-        if (blackboard.TryGetValue<EntityUid>(HealItemKey, out var item, _entManager))
-            medical.TryStowHealItem(owner, item);
-
         blackboard.Remove<ushort>(CurrentDoAfterKey);
     }
 
     public override HTNOperatorStatus Update(NPCBlackboard blackboard, float frameTime)
     {
-        var medical = _entManager.System<NPCMedicalSystem>();
         var owner = blackboard.GetValue<EntityUid>(NPCBlackboard.Owner);
         _steering.Unregister(owner);
 
@@ -63,33 +70,36 @@ public sealed partial class UseHealItemOperator : HTNOperator
             };
         }
 
-        if (medical.TryGetActiveHealingDoAfter(owner, out var existingId))
+        if (Sound != null)
         {
-            blackboard.SetValue(CurrentDoAfterKey, existingId);
-            return HTNOperatorStatus.Continuing;
+            try
+            {
+                _audio.PlayPvs(Sound, owner);
+            }
+            catch (FileNotFoundException)
+            {
+                // Missing audio metadata must not kill the server mid-HTN.
+            }
         }
 
-        if (!blackboard.TryGetValue<EntityUid>(HealTargetKey, out var patient, _entManager) ||
-            !blackboard.TryGetValue<EntityUid>(HealItemKey, out var item, _entManager))
-            return HTNOperatorStatus.Failed;
+        var args = new DoAfterArgs(_entManager, owner, Duration, new NpcSimpleDoTaskDoAfterEvent(), owner)
+        {
+            Hidden = false,
+            BreakOnMove = true,
+            BreakOnDamage = true,
+            NeedHand = false,
+        };
 
         ushort nextId = 0;
-        DoAfterComponent? doAfterComp = null;
-        if (_entManager.TryGetComponent(owner, out doAfterComp))
+        if (_entManager.TryGetComponent(owner, out DoAfterComponent? doAfterComp))
             nextId = doAfterComp.NextId;
 
-        if (!medical.TryUseHealItem(owner, patient, item))
+        if (!_doAfter.TryStartDoAfter(args))
             return HTNOperatorStatus.Failed;
 
         if (doAfterComp != null && nextId != doAfterComp.NextId)
         {
             blackboard.SetValue(CurrentDoAfterKey, nextId);
-            return HTNOperatorStatus.Continuing;
-        }
-
-        if (medical.TryGetActiveHealingDoAfter(owner, out var startedId))
-        {
-            blackboard.SetValue(CurrentDoAfterKey, startedId);
             return HTNOperatorStatus.Continuing;
         }
 

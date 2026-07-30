@@ -1,15 +1,16 @@
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using System.Linq;
 using System.Numerics;
 using Content.Server.Atmos.Rotting;
 using Content.Server.Medical;
-using Content.Server.NPC.HTN;
-using Content.Server.NPC.Prototypes;
 using Content.Shared.Body.Components;
+using Content.Shared.Body.Systems;
 using Content.Shared.Cabinet;
 using Content.Shared.CCVar;
 using Content.Shared.Chemistry.Components;
 using Content.Shared.Chemistry.EntitySystems;
+using Content.Shared.Chemistry.Reagent;
 using Content.Shared.Damage;
 using Content.Shared.DoAfter;
 using Content.Shared.FixedPoint;
@@ -23,12 +24,15 @@ using Content.Shared.Medical.Healing;
 using Content.Shared.Mobs;
 using Content.Shared.Mobs.Components;
 using Content.Shared.Mobs.Systems;
+using Content.Shared.NPC;
 using Content.Shared.NPC.Systems;
 using Content.Shared.Nutrition.EntitySystems;
 using Content.Shared.Stacks;
 using Content.Shared.Tag;
 using Content.Shared.Timing;
 using Content.Shared.Traits.Assorted;
+using Robust.Shared.Audio;
+using Robust.Shared.Audio.Systems;
 using Robust.Shared.Configuration;
 using Robust.Shared.Containers;
 using Robust.Shared.Map;
@@ -43,7 +47,13 @@ namespace Content.Server.NPC.Systems;
 /// </summary>
 public sealed class NPCMedicalSystem : EntitySystem
 {
-    public const float TreatableDamageThreshold = 15f;
+    public const float TreatableDamageThreshold = 10f;
+    /// <summary>Damage removed per illusion heal DoAfter (corpse prep and living allies).</summary>
+    public const float IllusionHealAmount = 10f;
+    /// <summary>Living allies are healed when TotalDamage exceeds this.</summary>
+    public const float IllusionHealThreshold = 10f;
+    /// <summary>Fraction of BloodMaxVolume restored per illusion heal.</summary>
+    public const float IllusionBloodRestoreFraction = 0.10f;
     public const float DefaultMedSearchRange = 7f;
     public const float DefaultMedLootHostileRange = 4f;
     public const int MaxKitStacks = 2;
@@ -56,6 +66,11 @@ public sealed class NPCMedicalSystem : EntitySystem
     public const float DefaultDefibZapDamage = 5f;
     /// <summary>After defib without a stabilizer pen, projected damage must stay below this to avoid waking into crit.</summary>
     public const float SoftReviveDamageCap = 95f;
+    /// <summary>Tricordrazine injected once when a heal course finishes.</summary>
+    public const float FinishingTricordrazineUnits = 15f;
+    private static readonly ProtoId<ReagentPrototype> TricordrazineReagent = "Tricordrazine";
+    private static readonly SoundSpecifier HyposprayInjectSound =
+        new SoundPathSpecifier("/Audio/Items/hypospray.ogg");
     public static readonly TimeSpan MedipenInjectCooldown = TimeSpan.FromSeconds(10);
     public static readonly TimeSpan DefibRetryCooldown = TimeSpan.FromSeconds(12);
 
@@ -86,6 +101,9 @@ public sealed class NPCMedicalSystem : EntitySystem
     [Dependency] private readonly IConfigurationManager _cfg = default!;
     [Dependency] private readonly IGameTiming _timing = default!;
     [Dependency] private readonly IPrototypeManager _proto = default!;
+    [Dependency] private readonly DamageableSystem _damageable = default!;
+    [Dependency] private readonly SharedAudioSystem _audio = default!;
+    [Dependency] private readonly SharedBloodstreamSystem _bloodstream = default!;
     [Dependency] private readonly DefibrillatorSystem _defib = default!;
     [Dependency] private readonly EntityLookupSystem _lookup = default!;
     [Dependency] private readonly HypospraySystem _hypospray = default!;
@@ -95,7 +113,6 @@ public sealed class NPCMedicalSystem : EntitySystem
     [Dependency] private readonly MobThresholdSystem _mobThreshold = default!;
     [Dependency] private readonly NpcFactionSystem _faction = default!;
     [Dependency] private readonly NPCGunAmmoSystem _ammo = default!;
-    [Dependency] private readonly NPCChemOntologySystem _chem = default!;
     [Dependency] private readonly OpenableSystem _openable = default!;
     [Dependency] private readonly RottingSystem _rotting = default!;
     [Dependency] private readonly SharedContainerSystem _containers = default!;
@@ -142,6 +159,31 @@ public sealed class NPCMedicalSystem : EntitySystem
             _debug = v;
             Log.Info($"[npc.medical] npc.debug_medical={(v ? "ON" : "OFF")}");
         });
+
+        SubscribeLocalEvent<NpcIllusionHealDoAfterEvent>(OnIllusionHealDoAfter);
+    }
+
+    private void OnIllusionHealDoAfter(NpcIllusionHealDoAfterEvent args)
+    {
+        if (args.Cancelled)
+            return;
+
+        if (args.Target is not { } patient || !Exists(patient))
+            return;
+
+        var healer = args.User;
+        TryApplyIllusionHeal(healer, patient);
+
+        // End of course: one hypospray of tricordrazine when the patient no longer needs heals.
+        if (IsRevivableCorpse(healer, patient))
+        {
+            if (IsCorpseReadyForDefib(healer, patient))
+                TryInjectFinishingTricordrazine(healer, patient);
+        }
+        else if (IsValidPatient(patient) && !NeedsLivingHeal(healer, patient))
+        {
+            TryInjectFinishingTricordrazine(healer, patient);
+        }
     }
 
     public void Debug(EntityUid owner, string message)
@@ -294,77 +336,249 @@ public sealed class NPCMedicalSystem : EntitySystem
     }
 
     /// <summary>
-    /// Damage goal for corpse kits reached: with a stabilizer pen → just leave Dead;
-    /// without → also stay under soft-revive cap so they do not wake into crit.
+    /// Corpse is healed enough that a defib zap wakes them without waking into deep trauma.
     /// </summary>
     public bool IsCorpseReadyForDefib(EntityUid healer, EntityUid patient, EntityUid? defib = null)
     {
-        if (!IsDefibReady(patient, defib))
+        if (!IsRevivableCorpse(healer, patient))
             return false;
 
-        if (HasPostReviveStabilizer(healer, patient))
-            return true;
-
-        return IsSoftReviveReady(patient, defib);
+        TryGetOwnedDefib(healer, out var owned);
+        return IsSoftReviveReady(patient, defib ?? owned);
     }
 
     /// <summary>
-    /// Corpse is damage-ready for this healer's tools and the defib is not cooling down.
+    /// Medic for now: anyone carrying a defibrillator. Later: squad medic role.
+    /// </summary>
+    public bool IsMedic(EntityUid owner)
+    {
+        return TryGetOwnedDefib(owner, out _);
+    }
+
+    /// <summary>
+    /// Corpse can be zapped: medic owns defib, corpse healed to soft-revive, not on cooldown.
     /// </summary>
     public bool CanSafelyDefibAlly(EntityUid healer, EntityUid patient)
     {
-        if (!IsRevivableCorpse(healer, patient))
+        if (!IsCorpseReadyForDefib(healer, patient))
             return false;
 
         if (IsDefibRetryBlocked(healer, patient))
             return false;
 
-        TryGetOwnedDefib(healer, out var ownedDefib);
-        if (!IsCorpseReadyForDefib(healer, patient, ownedDefib))
+        if (!TryGetOwnedDefib(healer, out var ownedDefib) || ownedDefib == null)
             return false;
 
-        if (ownedDefib != null && IsDefibOnUseDelay(ownedDefib.Value))
+        if (IsDefibOnUseDelay(ownedDefib.Value))
             return false;
 
         return true;
     }
 
     /// <summary>
-    /// Keep applying kits until the corpse meets this healer's defib damage goal
-    /// (soft revive without pen, or Dead-threshold with a stabilizer pen).
+    /// Friendly corpse that still needs incremental heals before defibrillation.
     /// </summary>
+    public bool NeedsCorpseHeal(EntityUid healer, EntityUid patient)
+    {
+        if (!IsMedic(healer) || !IsRevivableCorpse(healer, patient))
+            return false;
+
+        TryGetOwnedDefib(healer, out var owned);
+        return !IsSoftReviveReady(patient, owned);
+    }
+
+    /// <summary>
+    /// Living faction ally with more than <see cref="IllusionHealThreshold"/> total damage.
+    /// </summary>
+    public bool NeedsLivingHeal(EntityUid healer, EntityUid patient)
+    {
+        if (!IsMedic(healer) || patient == healer)
+            return false;
+
+        if (!Exists(patient) || !_faction.IsEntityFriendly(healer, patient))
+            return false;
+
+        if (!IsValidPatient(patient, allowDead: false))
+            return false;
+
+        if (!_damageableQuery.TryGetComponent(patient, out var damageable))
+            return false;
+
+        return damageable.TotalDamage.Float() > IllusionHealThreshold;
+    }
+
+    /// <summary>
+    /// Remove up to <see cref="IllusionHealAmount"/> damage, stop bleeding, restore 10% blood.
+    /// </summary>
+    public bool TryApplyIllusionHeal(EntityUid healer, EntityUid patient)
+    {
+        var applied = false;
+
+        if (_damageableQuery.TryGetComponent(patient, out var damageable) && damageable.TotalDamage > 0)
+        {
+            var total = damageable.TotalDamage;
+            var toHeal = FixedPoint2.Min(FixedPoint2.New(IllusionHealAmount), total);
+            var heal = new DamageSpecifier();
+            foreach (var (type, dmg) in damageable.Damage.DamageDict)
+            {
+                if (dmg <= 0)
+                    continue;
+
+                heal.DamageDict[type] = -(dmg / total) * toHeal;
+            }
+
+            _damageable.TryChangeDamage(patient, heal, ignoreResistances: true, interruptsDoAfters: false);
+            applied = true;
+            Debug(healer, $"IllusionHeal damage {ToPrettyString(patient)} -{toHeal}");
+        }
+
+        if (TryComp<BloodstreamComponent>(patient, out var blood))
+        {
+            if (blood.BleedAmount > 0)
+            {
+                _bloodstream.TryModifyBleedAmount((patient, blood), -blood.BleedAmount);
+                applied = true;
+                Debug(healer, $"IllusionHeal stopped bleed {ToPrettyString(patient)}");
+            }
+
+            var restore = blood.BloodMaxVolume * IllusionBloodRestoreFraction;
+            if (restore > 0 && _bloodstream.TryModifyBloodLevel((patient, blood), restore))
+            {
+                applied = true;
+                Debug(healer, $"IllusionHeal blood +{restore} ({IllusionBloodRestoreFraction:P0}) {ToPrettyString(patient)}");
+            }
+        }
+
+        return applied;
+    }
+
+    /// <summary>
+    /// One finishing hypospray: 15u tricordrazine + inject SFX (illusion med).
+    /// </summary>
+    public bool TryInjectFinishingTricordrazine(EntityUid healer, EntityUid patient)
+    {
+        if (!TryComp<BloodstreamComponent>(patient, out var blood))
+            return false;
+
+        var solution = new Solution(TricordrazineReagent, FixedPoint2.New(FinishingTricordrazineUnits));
+        if (!_bloodstream.TryAddToChemicals((patient, blood), solution))
+        {
+            Debug(healer, $"FinishingTricord FAIL add {ToPrettyString(patient)}");
+            return false;
+        }
+
+        try
+        {
+            _audio.PlayPvs(HyposprayInjectSound, patient);
+        }
+        catch (FileNotFoundException)
+        {
+        }
+
+        Debug(healer, $"FinishingTricord {FinishingTricordrazineUnits}u → {ToPrettyString(patient)}");
+        return true;
+    }
+
+    /// <summary>
+    /// Put any held defibrillator back into storage when it is not mid-zap.
+    /// </summary>
+    public bool TryStowHeldDefib(EntityUid owner)
+    {
+        if (IsDefibDoAfterRunning(owner))
+            return false;
+
+        var stowed = false;
+        foreach (var held in _hands.EnumerateHeld(owner).ToList())
+        {
+            if (!_defibQuery.HasComponent(held))
+                continue;
+
+            if (_itemToggle.IsActivated(held))
+                _itemToggle.TryDeactivate(held, owner);
+
+            if (_ammo.TryStowItem(owner, held))
+            {
+                stowed = true;
+                Debug(owner, $"StowDefib {ToPrettyString(held)}");
+            }
+            else
+            {
+                Debug(owner, $"StowDefib FAIL bag full {ToPrettyString(held)}");
+            }
+        }
+
+        return stowed;
+    }
+
+    public bool IsIllusionHealDoAfterRunning(EntityUid healer)
+    {
+        if (!TryComp<DoAfterComponent>(healer, out var comp))
+            return false;
+
+        foreach (var doAfter in comp.DoAfters.Values)
+        {
+            if (doAfter.Cancelled || doAfter.Completed)
+                continue;
+
+            if (doAfter.Args.Event is NpcIllusionHealDoAfterEvent)
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>Legacy name — corpse prep heals.</summary>
     public bool NeedsCorpseKitHeal(EntityUid healer, EntityUid patient)
     {
-        if (!IsRevivableCorpse(healer, patient))
-            return false;
-
-        TryGetOwnedDefib(healer, out var ownedDefib);
-        if (IsCorpseReadyForDefib(healer, patient, ownedDefib))
-            return false;
-
-        if (!TrySelectBestOwnedHeal(healer, patient, kits: true, medipens: false, out _, allowDead: true))
-            return false;
-
-        Debug(healer, $"NeedsCorpseKitHeal {ToPrettyString(patient)} soft={IsSoftReviveReady(patient, ownedDefib)} stabilizer={HasPostReviveStabilizer(healer, patient)}");
-        return true;
+        return NeedsCorpseHeal(healer, patient);
     }
 
     /// <summary>
-    /// True when a nearby friendly corpse can be revived (kits available if needed + defib owned or nearby).
+    /// True when a nearby friendly corpse can be revived with an owned defib (healed or still needs prep).
     /// </summary>
     public bool CanAttemptAllyRevive(EntityUid healer, float range)
     {
+        if (!IsMedic(healer))
+            return false;
+
         if (!TryPickRevivableCorpse(healer, range, out var corpse))
             return false;
 
-        if (!CanSafelyDefibAlly(healer, corpse.Value) && !NeedsCorpseKitHeal(healer, corpse.Value))
+        return CanSafelyDefibAlly(healer, corpse.Value) || NeedsCorpseHeal(healer, corpse.Value);
+    }
+
+    public bool TryPickCorpseNeedingHeal(EntityUid healer, float range, [NotNullWhen(true)] out EntityUid? corpse)
+    {
+        corpse = null;
+        if (!IsMedic(healer) || !_xformQuery.TryGetComponent(healer, out var xform))
             return false;
 
-        TryGetOwnedDefib(healer, out var ownedDefib);
-        if (ownedDefib != null || TrySelectNearbyDefibSource(healer, range, out _, out _))
-            return true;
+        var mapCoords = _transform.GetMapCoordinates(healer, xform: xform);
+        EntityUid? best = null;
+        var bestDamage = 0f;
 
-        return false;
+        foreach (var ent in _lookup.GetEntitiesInRange(mapCoords, range))
+        {
+            if (!NeedsCorpseHeal(healer, ent))
+                continue;
+
+            if (!_damageableQuery.TryGetComponent(ent, out var damageable))
+                continue;
+
+            var dmg = damageable.TotalDamage.Float();
+            if (dmg <= bestDamage)
+                continue;
+
+            bestDamage = dmg;
+            best = ent;
+        }
+
+        if (best == null)
+            return false;
+
+        corpse = best;
+        Debug(healer, $"PickCorpseHeal {ToPrettyString(best.Value)} damage={bestDamage:F1}");
+        return true;
     }
 
     public bool TryPickRevivableCorpse(EntityUid healer, float range, [NotNullWhen(true)] out EntityUid? corpse)
@@ -391,25 +605,15 @@ public sealed class NPCMedicalSystem : EntitySystem
                 score += (float)damageable.TotalDamage.Float();
 
             // Ready to zap now (soft revive without pen, or crit+pen path).
-            if (IsCorpseReadyForDefib(healer, ent, ownedDefib))
-            {
-                if (IsDefibRetryBlocked(healer, ent))
-                    continue;
-                if (ownedDefib != null && IsDefibOnUseDelay(ownedDefib.Value))
-                    continue;
-
-                score += 1000f;
-            }
-            // Still kit-healing toward the damage goal — ignore only when no useful kits left.
-            else if (TrySelectBestOwnedHeal(healer, ent, kits: true, medipens: false, out _, allowDead: true))
-            {
-                score += 500f;
-            }
-            else
-            {
-                // Not enough kits (and no pen path that already met Dead-threshold readiness).
+            if (!IsCorpseReadyForDefib(healer, ent, ownedDefib))
                 continue;
-            }
+
+            if (IsDefibRetryBlocked(healer, ent))
+                continue;
+            if (ownedDefib != null && IsDefibOnUseDelay(ownedDefib.Value))
+                continue;
+
+            score += 1000f;
 
             if (_xformQuery.TryGetComponent(ent, out var entXform))
             {
@@ -591,8 +795,7 @@ public sealed class NPCMedicalSystem : EntitySystem
     public bool TryPickHealAlly(EntityUid healer, float range, [NotNullWhen(true)] out EntityUid? ally, bool critOnly = false)
     {
         ally = null;
-        // Early-out: no owned tools that could treat anyone.
-        if (!HasOwnedMedTools(healer, kits: true, pens: true))
+        if (!IsMedic(healer))
             return false;
 
         if (!_xformQuery.TryGetComponent(healer, out var xform))
@@ -604,26 +807,20 @@ public sealed class NPCMedicalSystem : EntitySystem
 
         foreach (var ent in _lookup.GetEntitiesInRange(mapCoords, range))
         {
-            if (ent == healer)
-                continue;
-
-            if (!_faction.IsEntityFriendly(healer, ent))
-                continue;
-
-            if (!IsValidPatient(ent))
+            if (!NeedsLivingHeal(healer, ent))
                 continue;
 
             if (critOnly && !_mobState.IsCritical(ent))
                 continue;
 
-            var treatable = GetOwnedTreatableDamage(healer, ent);
-            if (treatable <= TreatableDamageThreshold)
+            if (!_damageableQuery.TryGetComponent(ent, out var damageable))
                 continue;
 
-            if (treatable <= bestDamage)
+            var dmg = damageable.TotalDamage.Float();
+            if (dmg <= bestDamage)
                 continue;
 
-            bestDamage = treatable;
+            bestDamage = dmg;
             best = ent;
         }
 
@@ -631,7 +828,7 @@ public sealed class NPCMedicalSystem : EntitySystem
             return false;
 
         ally = best;
-        Debug(healer, $"PickAlly {ToPrettyString(best.Value)} treatable={bestDamage:F1} critOnly={critOnly}");
+        Debug(healer, $"PickAlly {ToPrettyString(best.Value)} damage={bestDamage:F1} critOnly={critOnly}");
         return true;
     }
 
@@ -647,20 +844,9 @@ public sealed class NPCMedicalSystem : EntitySystem
 
     public void GetMedCaps(EntityUid owner, out int maxKits, out int maxPens)
     {
+        // Caps kept for leftover heal helpers; illusion medic does not stock kits/pens via AI.
         maxKits = MaxKitStacks;
         maxPens = MaxMedipens;
-
-        if (!TryComp<HTNComponent>(owner, out var htn))
-            return;
-
-        if (!htn.Blackboard.TryGetValue<string>(NPCBlackboard.InventoryPolicy, out var policyId, EntityManager))
-            return;
-
-        if (_proto.TryIndex<NpcInventoryPolicyPrototype>(policyId, out var policy))
-        {
-            maxKits = policy.MaxKitStacks;
-            maxPens = policy.MaxMedipens;
-        }
     }
 
     public bool HasOwnedMedTools(EntityUid owner, bool kits = true, bool pens = true)
@@ -931,7 +1117,7 @@ public sealed class NPCMedicalSystem : EntitySystem
         {
             if (!IsCorpseReadyForDefib(owner, patient, defib))
             {
-                Debug(owner, $"DefibZap FAIL not ready soft={IsSoftReviveReady(patient, defib)} stabilizer={HasPostReviveStabilizer(owner, patient)} patient={ToPrettyString(patient)}");
+                Debug(owner, $"DefibZap FAIL corpse not healed yet {ToPrettyString(patient)}");
                 return false;
             }
 
@@ -1224,11 +1410,6 @@ public sealed class NPCMedicalSystem : EntitySystem
             return false;
 
         if (!MedipenProfiles.TryGetValue(proto.ID, out profile))
-            return false;
-
-        // Role chem knowledge can deny families the ontology still knows about.
-        if (_containers.TryGetContainingContainer(item, out var container) &&
-            !_chem.IsAllowedByKnowledge(container.Owner, item))
             return false;
 
         if (!_solutions.TryGetSolution(item, hypo.SolutionName, out _, out var solution))

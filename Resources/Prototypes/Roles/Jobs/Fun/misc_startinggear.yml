@@ -39,9 +39,13 @@
     back: ClothingBackpack
     shoes: ClothingShoesBootsCombat
     id: SyndiPDA
+    pocket1: NFWeaponPistolViper
+    pocket2: NFMagazinePistol35
   storage:
     back:
     - BoxSurvival
+    - NFMagazinePistol35
+    - NFMagazinePistol35
 
 # Syndicate Footsoldier Gear
 - type: startingGear

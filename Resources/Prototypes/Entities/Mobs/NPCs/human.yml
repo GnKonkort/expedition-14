@@ -132,7 +132,7 @@
     - type: MobMover
     - type: HTN
       rootTask:
-        task: HumanoidMedicCompound
+        task: HumanoidAgentCompound
       blackboard:
         NavClimb: !type:Bool
           true
@@ -161,7 +161,7 @@
     - type: MobMover
     - type: HTN
       rootTask:
-        task: HumanoidEngineerCompound
+        task: HumanoidAgentCompound
       blackboard:
         NavClimb: !type:Bool
           true
@@ -190,7 +190,7 @@
     - type: MobMover
     - type: HTN
       rootTask:
-        task: HumanoidSecurityCompound
+        task: HumanoidAgentCompound
       blackboard:
         NavClimb: !type:Bool
           true

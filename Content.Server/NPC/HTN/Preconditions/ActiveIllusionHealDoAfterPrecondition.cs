@@ -3,9 +3,9 @@ using Content.Server.NPC.Systems;
 namespace Content.Server.NPC.HTN.Preconditions;
 
 /// <summary>
-/// True when the NPC is carrying a used / empty recognized medipen.
+/// True while an illusion heal DoAfter is running.
 /// </summary>
-public sealed partial class HasEmptyMedipenPrecondition : HTNPrecondition
+public sealed partial class ActiveIllusionHealDoAfterPrecondition : HTNPrecondition
 {
     [Dependency] private readonly IEntityManager _entManager = default!;
 
@@ -16,7 +16,7 @@ public sealed partial class HasEmptyMedipenPrecondition : HTNPrecondition
     {
         var medical = _entManager.System<NPCMedicalSystem>();
         var owner = blackboard.GetValue<EntityUid>(NPCBlackboard.Owner);
-        var has = medical.TryFindEmptyMedipen(owner, out _);
-        return Invert ? !has : has;
+        var active = medical.IsIllusionHealDoAfterRunning(owner);
+        return Invert ? !active : active;
     }
 }

@@ -7,9 +7,9 @@ using Robust.Shared.Map;
 namespace Content.Server.NPC.HTN.PrimitiveTasks.Operators.Combat.Medical;
 
 /// <summary>
-/// Sets TargetCoordinates to HealTarget (e.g. after ObtainDefib overwrote them).
+/// Picks a faction corpse that still needs healing before defibrillation.
 /// </summary>
-public sealed partial class RetargetHealPatientOperator : HTNOperator
+public sealed partial class PickCorpseHealTargetOperator : HTNOperator
 {
     [Dependency] private readonly IEntityManager _entManager = default!;
 
@@ -23,27 +23,22 @@ public sealed partial class RetargetHealPatientOperator : HTNOperator
         NPCBlackboard blackboard,
         CancellationToken cancelToken)
     {
-        if (!blackboard.TryGetValue<EntityUid>(HealTargetKey, out var patient, _entManager))
-            return (false, null);
+        var medical = _entManager.System<NPCMedicalSystem>();
+        var owner = blackboard.GetValue<EntityUid>(NPCBlackboard.Owner);
+        var range = medical.GetMedSearchRange(blackboard);
 
-        if (!_entManager.EntityExists(patient))
+        if (!medical.TryPickCorpseNeedingHeal(owner, range, out var corpse) || corpse == null)
             return (false, null);
 
         return (true, new Dictionary<string, object>
         {
-            { TargetCoordinatesKey, new EntityCoordinates(patient, Vector2.Zero) },
+            { HealTargetKey, corpse.Value },
+            { TargetCoordinatesKey, new EntityCoordinates(corpse.Value, Vector2.Zero) },
         });
     }
 
     public override HTNOperatorStatus Update(NPCBlackboard blackboard, float frameTime)
     {
-        if (!blackboard.TryGetValue<EntityUid>(HealTargetKey, out var patient, _entManager))
-            return HTNOperatorStatus.Failed;
-
-        if (!_entManager.EntityExists(patient))
-            return HTNOperatorStatus.Failed;
-
-        blackboard.SetValue(TargetCoordinatesKey, new EntityCoordinates(patient, Vector2.Zero));
         return HTNOperatorStatus.Finished;
     }
 }

@@ -327,38 +327,8 @@ public sealed partial class NPCBlackboard : IEnumerable<KeyValuePair<string, obj
     /// </summary>
     public const string DefibItem = "DefibItem";
 
-    // --- Need board flags (bool) refreshed by NPCNeedSystem ---
-    public const string NeedInVacuum = "NeedInVacuum";
-    public const string NeedLowPressure = "NeedLowPressure";
-    public const string NeedHasHostile = "NeedHasHostile";
-    public const string NeedAmmoCritical = "NeedAmmoCritical";
-    public const string NeedMedStockLow = "NeedMedStockLow";
-    public const string NeedSeekAtmosphere = "NeedSeekAtmosphere";
-    public const string NeedDoorBlocked = "NeedDoorBlocked";
-
-    /// <summary>Safe atmos / room flee destination.</summary>
-    public const string AtmosSafeCoordinates = "AtmosSafeCoordinates";
-
     /// <summary>Door entity blocking the current path that needs bypass.</summary>
     public const string BypassDoorTarget = "BypassDoorTarget";
-
-    /// <summary>Active inventory policy prototype id.</summary>
-    public const string InventoryPolicy = "InventoryPolicy";
-
-    /// <summary>Active chem knowledge prototype id.</summary>
-    public const string ChemKnowledge = "ChemKnowledge";
-
-    /// <summary>Damaged repairable structure/entity for engineer NPCs.</summary>
-    public const string RepairTarget = "RepairTarget";
-
-    /// <summary>Selected repair tool (welder etc.).</summary>
-    public const string RepairTool = "RepairTool";
-
-    /// <summary>Hostile/detainee to cuff for security NPCs.</summary>
-    public const string ArrestTarget = "ArrestTarget";
-
-    /// <summary>Handcuff entity selected for arrest.</summary>
-    public const string ArrestCuffs = "ArrestCuffs";
 
     public const string Target = "Target";
     public const string TargetCoordinates = "TargetCoordinates";

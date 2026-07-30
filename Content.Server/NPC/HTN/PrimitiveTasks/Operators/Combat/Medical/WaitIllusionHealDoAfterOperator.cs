@@ -3,9 +3,9 @@ using Content.Server.NPC.Systems;
 namespace Content.Server.NPC.HTN.PrimitiveTasks.Operators.Combat.Medical;
 
 /// <summary>
-/// Stays put while a kit healing do-after is active.
+/// Stays put while an illusion heal DoAfter is active.
 /// </summary>
-public sealed partial class WaitHealDoAfterOperator : HTNOperator
+public sealed partial class WaitIllusionHealDoAfterOperator : HTNOperator
 {
     [Dependency] private readonly IEntityManager _entManager = default!;
 
@@ -23,7 +23,7 @@ public sealed partial class WaitHealDoAfterOperator : HTNOperator
         var owner = blackboard.GetValue<EntityUid>(NPCBlackboard.Owner);
         _steering.Unregister(owner);
 
-        if (!medical.IsHealingDoAfterRunning(owner))
+        if (!medical.IsIllusionHealDoAfterRunning(owner))
             return HTNOperatorStatus.Finished;
 
         return HTNOperatorStatus.Continuing;

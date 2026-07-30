@@ -25,7 +25,10 @@ public sealed partial class WaitDefibDoAfterOperator : HTNOperator
         _steering.Unregister(owner);
 
         if (!medical.IsDefibDoAfterRunning(owner))
+        {
+            medical.TryStowHeldDefib(owner);
             return HTNOperatorStatus.Finished;
+        }
 
         return HTNOperatorStatus.Continuing;
     }

@@ -1,17 +1,29 @@
 using System.Threading;
 using System.Threading.Tasks;
 using Content.Server.NPC.Systems;
-using Content.Shared.Interaction;
-using Content.Shared.Weapons.Ranged.Components;
+using Content.Shared.DoAfter;
+using Content.Shared.Weapons.Ranged.Events;
 
 namespace Content.Server.NPC.HTN.PrimitiveTasks.Operators.Combat.Ranged;
 
 /// <summary>
-/// Inserts a loaded magazine, swaps/inserts a power cell, or feeds a ballistic tube (one round per Update tick).
+/// Illusion reload: Hidden DoAfter + SFX, then auto-refill / close bolt. No ammo loot.
 /// </summary>
 public sealed partial class ReloadHeldGunOperator : HTNOperator
 {
     [Dependency] private readonly IEntityManager _entManager = default!;
+
+    private SharedDoAfterSystem _doAfter = default!;
+    private NPCSteeringSystem _steering = default!;
+
+    private const string CurrentDoAfterKey = "CurrentIllusionReload";
+
+    public override void Initialize(IEntitySystemManager sysManager)
+    {
+        base.Initialize(sysManager);
+        _doAfter = sysManager.GetEntitySystem<SharedDoAfterSystem>();
+        _steering = sysManager.GetEntitySystem<NPCSteeringSystem>();
+    }
 
     public override async Task<(bool Valid, Dictionary<string, object>? Effects)> Plan(
         NPCBlackboard blackboard,
@@ -21,136 +33,74 @@ public sealed partial class ReloadHeldGunOperator : HTNOperator
         var owner = blackboard.GetValue<EntityUid>(NPCBlackboard.Owner);
 
         if (!ammo.TryGetOwnedGun(owner, out var gun, out _, blackboard))
-        {
-            ammo.DebugAmmo(owner, "ReloadHeldGun.Plan: no owned gun", force: true);
             return (false, null);
-        }
 
-        if (ammo.IsMagazineFed(gun))
-        {
-            var needs = ammo.NeedsMagazineInsert(owner, gun);
-            ammo.DebugAmmo(owner, $"ReloadHeldGun.Plan magInsert={needs}", force: true);
-            return (needs, null);
-        }
+        if (ammo.IsIllusionReloading(owner))
+            return (true, null);
 
-        if (ammo.IsPowerCellSwapGun(gun))
-        {
-            var needs = ammo.NeedsPowerCellInsert(owner, gun);
-            ammo.DebugAmmo(owner,
-                $"ReloadHeldGun.Plan powerCell={needs} ({ammo.DescribeEnergyGunState(owner, gun, blackboard)})",
-                force: true);
-            return (needs, null);
-        }
+        var ev = new GetAmmoCountEvent();
+        _entManager.EventBus.RaiseLocalEvent(gun, ref ev);
+        // Plan succeeds when empty / nearly empty so combat tree can refill.
+        return (ev.Capacity > 0 && ev.Count <= 0, null);
+    }
 
-        if (_entManager.HasComponent<BallisticAmmoProviderComponent>(gun))
-        {
-            var needs = ammo.NeedsBallisticTubeFill(owner, gun);
-            ammo.DebugAmmo(owner, $"ReloadHeldGun.Plan tubeFill={needs}", force: true);
-            return (needs, null);
-        }
+    public override void Startup(NPCBlackboard blackboard)
+    {
+        blackboard.Remove<ushort>(CurrentDoAfterKey);
+    }
 
-        ammo.DebugAmmo(owner,
-            $"ReloadHeldGun.Plan: no reload path ({ammo.DescribeEnergyGunState(owner, gun, blackboard)})",
-            force: true);
-        return (false, null);
+    public override void TaskShutdown(NPCBlackboard blackboard, HTNOperatorStatus status)
+    {
+        blackboard.Remove<ushort>(CurrentDoAfterKey);
     }
 
     public override HTNOperatorStatus Update(NPCBlackboard blackboard, float frameTime)
     {
         var ammo = _entManager.System<NPCGunAmmoSystem>();
-        var interaction = _entManager.System<SharedInteractionSystem>();
         var owner = blackboard.GetValue<EntityUid>(NPCBlackboard.Owner);
+        _steering.Unregister(owner);
 
         if (!ammo.TryGetOwnedGun(owner, out var gun, out _, blackboard))
-        {
-            ammo.DebugAmmo(owner, "ReloadHeldGun.Update: FAIL no owned gun", force: true);
-            ammo.SetAmmoSearchCooldown(blackboard);
             return HTNOperatorStatus.Failed;
+
+        if (blackboard.TryGetValue<ushort>(CurrentDoAfterKey, out var trackedId, _entManager))
+        {
+            return _doAfter.GetStatus(owner, trackedId, null) switch
+            {
+                DoAfterStatus.Running => HTNOperatorStatus.Continuing,
+                DoAfterStatus.Finished => HTNOperatorStatus.Finished,
+                _ => HTNOperatorStatus.Failed,
+            };
         }
 
-        if (ammo.IsMagazineFed(gun))
-        {
-            if (!ammo.TryFindCompatibleLoadedMagazine(owner, gun, out var magazine))
-            {
-                ammo.DebugAmmo(owner, "ReloadHeldGun.Update: FAIL no spare mag", force: true);
-                ammo.SetAmmoSearchCooldown(blackboard);
-                return HTNOperatorStatus.Failed;
-            }
-
-            if (ammo.TryInsertMagazine(owner, gun, magazine))
-            {
-                ammo.DebugAmmo(owner, $"ReloadHeldGun.Update: mag insert OK {_entManager.ToPrettyString(magazine)}", force: true);
-                return HTNOperatorStatus.Finished;
-            }
-
-            if (!ammo.TryObtainInHand(owner, magazine))
-            {
-                ammo.DebugAmmo(owner, "ReloadHeldGun.Update: FAIL obtain mag", force: true);
-                ammo.SetAmmoSearchCooldown(blackboard);
-                return HTNOperatorStatus.Failed;
-            }
-
-            var coords = _entManager.GetComponent<TransformComponent>(gun).Coordinates;
-            var interacted = interaction.InteractUsing(owner, magazine, gun, coords, checkCanInteract: false, checkCanUse: false);
-            if (!interacted)
-            {
-                ammo.DebugAmmo(owner, "ReloadHeldGun.Update: FAIL InteractUsing mag", force: true);
-                ammo.SetAmmoSearchCooldown(blackboard);
-                return HTNOperatorStatus.Failed;
-            }
-
-            ammo.EnsureChamberReady(gun, owner);
-            ammo.DebugAmmo(owner, "ReloadHeldGun.Update: mag InteractUsing OK", force: true);
+        var ev = new GetAmmoCountEvent();
+        _entManager.EventBus.RaiseLocalEvent(gun, ref ev);
+        if (ev.Count > 0)
             return HTNOperatorStatus.Finished;
+
+        if (ammo.IsIllusionReloading(owner) && ammo.TryGetActiveIllusionReload(owner, out var runningId))
+        {
+            blackboard.SetValue(CurrentDoAfterKey, runningId);
+            return HTNOperatorStatus.Continuing;
         }
 
-        if (ammo.IsPowerCellSwapGun(gun))
-        {
-            if (!ammo.TryFindBestCompatiblePowerCell(owner, gun, out var cell, out var cellScore))
-            {
-                ammo.DebugAmmo(owner,
-                    $"ReloadHeldGun.Update: FAIL no power cell ({ammo.DescribeEnergyGunState(owner, gun, blackboard)}) cells={ammo.DescribeOwnedPowerCells(owner, gun)}",
-                    force: true);
-                ammo.SetAmmoSearchCooldown(blackboard);
-                return HTNOperatorStatus.Failed;
-            }
+        ushort nextId = 0;
+        DoAfterComponent? doAfterComp = null;
+        if (_entManager.TryGetComponent(owner, out doAfterComp))
+            nextId = doAfterComp.NextId;
 
-            ammo.DebugAmmo(owner,
-                $"ReloadHeldGun.Update: inserting score={cellScore} {ammo.DescribePowerCell(cell, gun)}",
-                force: true);
-
-            if (ammo.TryInsertPowerCell(owner, gun, cell))
-            {
-                ammo.DebugAmmo(owner,
-                    $"ReloadHeldGun.Update: cell insert OK {_entManager.ToPrettyString(cell)} after={ammo.DescribeOwnedPowerCells(owner, gun)}",
-                    force: true);
-                ammo.TryFinishAmmoWorkReadyToFight(owner, gun, blackboard);
-                return HTNOperatorStatus.Finished;
-            }
-
-            ammo.DebugAmmo(owner, $"ReloadHeldGun.Update: FAIL insert cell {_entManager.ToPrettyString(cell)}", force: true);
-            ammo.SetAmmoSearchCooldown(blackboard);
+        if (!ammo.TryStartIllusionReload(owner, gun))
             return HTNOperatorStatus.Failed;
-        }
 
-        if (_entManager.HasComponent<BallisticAmmoProviderComponent>(gun))
+        if (doAfterComp != null && nextId != doAfterComp.NextId)
         {
-            if (!ammo.IsProviderBelowCapacity(gun))
-                return HTNOperatorStatus.Finished;
-
-            if (!ammo.TryFeedOneIntoProvider(owner, gun, gun))
-            {
-                ammo.SetAmmoSearchCooldown(blackboard);
-                return HTNOperatorStatus.Failed;
-            }
-
-            var cont = ammo.IsProviderBelowCapacity(gun) &&
-                       (ammo.TryFindCompatibleCartridge(owner, gun, out _) ||
-                        ammo.TryFindMayTransferAmmoBox(owner, gun, gun, out _));
-            return cont ? HTNOperatorStatus.Continuing : HTNOperatorStatus.Finished;
+            blackboard.SetValue(CurrentDoAfterKey, nextId);
+            return HTNOperatorStatus.Continuing;
         }
 
-        ammo.SetAmmoSearchCooldown(blackboard);
-        return HTNOperatorStatus.Failed;
+        // Instant DoAfter (tag / zero delay) — Apply already ran via event.
+        var done = new GetAmmoCountEvent();
+        _entManager.EventBus.RaiseLocalEvent(gun, ref done);
+        return done.Count > 0 ? HTNOperatorStatus.Finished : HTNOperatorStatus.Failed;
     }
 }

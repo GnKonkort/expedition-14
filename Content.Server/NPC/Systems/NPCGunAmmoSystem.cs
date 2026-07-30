@@ -1,9 +1,13 @@
 using System.Diagnostics.CodeAnalysis;
 using Content.Server.NPC.Components;
+using Content.Server.Power.Components;
+using Content.Server.Power.EntitySystems;
 using Content.Shared.Containers.ItemSlots;
+using Content.Shared.DoAfter;
 using Content.Shared.Hands.EntitySystems;
 using Content.Shared.Inventory;
 using Content.Shared.Inventory.VirtualItem;
+using Content.Shared.NPC;
 using Content.Shared.NPC.Systems;
 using Content.Shared.Storage;
 using Content.Shared.Storage.EntitySystems;
@@ -15,6 +19,8 @@ using Content.Shared.Weapons.Ranged.Systems;
 using Content.Shared.Whitelist;
 using Content.Shared.Wieldable;
 using Content.Shared.Wieldable.Components;
+using Robust.Shared.Audio;
+using Robust.Shared.Audio.Systems;
 using Robust.Shared.Containers;
 using Robust.Shared.Random;
 using Robust.Shared.Timing;
@@ -42,6 +48,12 @@ public sealed partial class NPCGunAmmoSystem : EntitySystem
     public const float DefaultAmmoSearchRange = 7f;
     public const float DefaultAmmoLootHostileRange = 4f;
     public const float AmmoSearchCooldownSeconds = 4f;
+    /// <summary>Illusion mag / energy "reload" duration (DoAfter).</summary>
+    public const float IllusionReloadDurationSeconds = 2f;
+    private static readonly SoundSpecifier IllusionMagReloadSound =
+        new SoundPathSpecifier("/Audio/Weapons/Guns/MagIn/smg_magin.ogg");
+    private static readonly SoundSpecifier IllusionEnergyReloadSound =
+        new SoundCollectionSpecifier("sparks");
     /// <summary>
     /// Blackboard TimeSpan: last time this NPC was actively fighting (gun/melee operators).
     /// </summary>
@@ -84,6 +96,9 @@ public sealed partial class NPCGunAmmoSystem : EntitySystem
     [Dependency] private readonly SharedGunSystem _guns = default!;
     [Dependency] private readonly NpcFactionSystem _npcFaction = default!;
     [Dependency] private readonly SharedWieldableSystem _wieldable = default!;
+    [Dependency] private readonly SharedAudioSystem _audio = default!;
+    [Dependency] private readonly BatterySystem _battery = default!;
+    [Dependency] private readonly SharedDoAfterSystem _doAfter = default!;
 
     private EntityQuery<BallisticAmmoProviderComponent> _ballisticQuery;
     private EntityQuery<StorageComponent> _storageQuery;
@@ -102,6 +117,7 @@ public sealed partial class NPCGunAmmoSystem : EntitySystem
         _xformQuery = GetEntityQuery<TransformComponent>();
         _cartridgeQuery = GetEntityQuery<CartridgeAmmoComponent>();
         InitializeEnergy();
+        SubscribeLocalEvent<NpcIllusionReloadDoAfterEvent>(OnIllusionReloadDoAfter);
     }
 
     /// <summary>
@@ -154,6 +170,195 @@ public sealed partial class NPCGunAmmoSystem : EntitySystem
             $"gun={ToPrettyString(gun)} count={ev.Count}/{ev.Capacity} magFed={IsMagazineFed(gun)} " +
             $"seated={(seated == null ? "null" : ToPrettyString(seated.Value))} " +
             $"active={(active == null ? "null" : ToPrettyString(active.Value))}";
+    }
+
+    /// <summary>
+    /// True while an illusion reload DoAfter is running on this NPC.
+    /// </summary>
+    public bool IsIllusionReloading(EntityUid owner)
+    {
+        return TryGetActiveIllusionReload(owner, out _);
+    }
+
+    public bool TryGetActiveIllusionReload(EntityUid owner, out ushort id)
+    {
+        id = 0;
+        if (!TryComp<DoAfterComponent>(owner, out var comp))
+            return false;
+
+        foreach (var (index, doAfter) in comp.DoAfters)
+        {
+            if (doAfter.Cancelled || doAfter.Completed)
+                continue;
+
+            if (doAfter.Args.Event is NpcIllusionReloadDoAfterEvent)
+            {
+                id = index;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Starts (or continues) a timed illusion reload: Hidden DoAfter + SFX, then refill + bolt close.
+    /// Returns true when the gun has usable ammo after this call (already full, or DoAfter just finished).
+    /// Returns false while waiting / if start failed.
+    /// </summary>
+    public bool TryIllusionReload(EntityUid owner, EntityUid gun, GunComponent? gunComp = null)
+    {
+        if (!_gunQuery.Resolve(gun, ref gunComp, false))
+            return false;
+
+        // Prefer shooting from this gun after refill.
+        if (_hands.IsHolding(owner, gun))
+            _hands.TrySelect(owner, gun);
+        else
+            TryDrawOwnedGun(owner, gun);
+
+        // Mag may already be full with bolt open after an empty cycle — rack before early-out.
+        EnsureChamberReady(gun, owner);
+
+        var ev = new GetAmmoCountEvent();
+        RaiseLocalEvent(gun, ref ev);
+        if (ev.Count > 0)
+            return true;
+
+        if (IsIllusionReloading(owner))
+            return false;
+
+        return TryStartIllusionReload(owner, gun);
+    }
+
+    /// <summary>
+    /// Starts Hidden DoAfter + reload/short-circuit SFX. Does not refill until DoAfter finishes.
+    /// </summary>
+    public bool TryStartIllusionReload(EntityUid owner, EntityUid gun)
+    {
+        if (!Exists(owner) || !Exists(gun))
+            return false;
+
+        if (IsIllusionReloading(owner))
+            return true;
+
+        EnsureComp<DoAfterComponent>(owner);
+
+        var energy = IsEnergyGun(gun) || IsPowerCellSwapGun(gun);
+        var sound = energy ? IllusionEnergyReloadSound : IllusionMagReloadSound;
+        _audio.PlayPvs(sound, gun);
+
+        var args = new DoAfterArgs(EntityManager, owner, IllusionReloadDurationSeconds,
+            new NpcIllusionReloadDoAfterEvent(), eventTarget: owner, used: gun)
+        {
+            Broadcast = true,
+            Hidden = true,
+            BreakOnMove = false,
+            BreakOnDamage = true,
+            NeedHand = false,
+            CancelDuplicate = true,
+            DuplicateCondition = DuplicateConditions.SameEvent,
+        };
+
+        if (!_doAfter.TryStartDoAfter(args))
+        {
+            DebugAmmo(owner, "IllusionReload DoAfter failed to start", force: true);
+            return false;
+        }
+
+        DebugAmmo(owner, $"IllusionReload started energy={energy} {DescribeGunAmmoState(owner, gun)}", force: true);
+        return true;
+    }
+
+    private void OnIllusionReloadDoAfter(NpcIllusionReloadDoAfterEvent args)
+    {
+        if (args.Cancelled)
+            return;
+
+        var owner = args.User;
+        if (args.Used is not { } gun || !Exists(gun))
+            return;
+
+        ApplyIllusionReload(owner, gun);
+    }
+
+    /// <summary>
+    /// Instant refill + chamber/bolt ready (no DoAfter). Used when the illusion wait finishes.
+    /// </summary>
+    public bool ApplyIllusionReload(EntityUid owner, EntityUid gun, GunComponent? gunComp = null)
+    {
+        if (!_gunQuery.Resolve(gun, ref gunComp, false))
+            return false;
+
+        if (_hands.IsHolding(owner, gun))
+            _hands.TrySelect(owner, gun);
+        else
+            TryDrawOwnedGun(owner, gun);
+
+        var filled = false;
+
+        // Mag-fed guns often spawn without a seated mag (Frontier) — seat one from inventory first.
+        if (IsMagazineFed(gun))
+        {
+            if (!TryGetSeatedMagazine(gun, out var mag))
+            {
+                if (TryFindCompatibleLoadedMagazine(owner, gun, out var spare) ||
+                    TryFindIncompleteCompatibleMagazine(owner, gun, out spare))
+                {
+                    TryInsertMagazine(owner, gun, spare);
+                }
+            }
+
+            if (TryGetSeatedMagazine(gun, out mag))
+                filled |= TryFillAmmoProvider(mag);
+        }
+
+        // Chamber-fed: top off chamber ammo provider if present.
+        if (TryGetGunChamberSlot(gun, out var chamber) && chamber.Item is { } chamberAmmo)
+            filled |= TryFillAmmoProvider(chamberAmmo);
+
+        filled |= TryFillAmmoProvider(gun);
+
+        if (TryGetSeatedPowerCell(gun, out var cell) && TryComp<BatteryComponent>(cell, out var battery))
+        {
+            _battery.SetCharge(cell, battery.MaxCharge, battery);
+            filled = true;
+        }
+
+        // Chamber-magazine pistols/SMGs need a closed bolt + live round or Count stays 0.
+        EnsureChamberReady(gun, owner);
+
+        var ev = new GetAmmoCountEvent();
+        RaiseLocalEvent(gun, ref ev);
+        if (ev.Count > 0)
+            filled = true;
+
+        DebugAmmo(owner, $"IllusionReload applied filled={filled} {DescribeGunAmmoState(owner, gun)}", force: true);
+        return filled;
+    }
+
+    private bool TryFillAmmoProvider(EntityUid provider)
+    {
+        if (_ballisticQuery.TryGetComponent(provider, out var ballistic))
+        {
+            var shots = ballistic.Entities.Count + ballistic.UnspawnedCount;
+            if (shots >= ballistic.Capacity)
+                return false;
+
+            _guns.SetBallisticUnspawned((provider, ballistic),
+                Math.Max(0, ballistic.Capacity - ballistic.Entities.Count));
+            return true;
+        }
+
+        // BatteryAmmoProviderComponent is abstract — TryComp on it asserts "Unknown component".
+        if ((_hitscanBatteryQuery.HasComponent(provider) || _projectileBatteryQuery.HasComponent(provider)) &&
+            _batteryQuery.TryGetComponent(provider, out var bat))
+        {
+            _battery.SetCharge(provider, bat.MaxCharge, bat);
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>

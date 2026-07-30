@@ -82,12 +82,16 @@ public sealed class NPCAccessBypassSystem : EntitySystem
         if (doorComp.State is DoorState.Open or DoorState.Opening)
             return DoorHandleResult.None;
 
+        // Role gate from editor profile (missing key = allow).
+        if (TryComp<HTNComponent>(owner, out var htn) &&
+            htn.Blackboard.TryGetValue<bool>(NPCRoleSystem.CanBypassDoorKey, out var canBypass, EntityManager) &&
+            !canBypass)
+            return DoorHandleResult.None;
+
         if (doorComp.State == DoorState.Welded)
         {
             if (TryFindBreachCharge(owner, out _))
                 return DoorHandleResult.BreachExplosive;
-            if (HasBreachMelee(owner))
-                return DoorHandleResult.BreachMelee;
             return DoorHandleResult.None;
         }
 
@@ -96,35 +100,23 @@ public sealed class NPCAccessBypassSystem : EntitySystem
         var hasReader = _readerQuery.HasComponent(door);
         var allowed = !hasReader || _access.IsAllowed(owner, door);
 
-        // 1. Normal open: access (or no reader), powered, unbolted.
+        // Simple open when allowed.
         if (allowed && powered && !bolted)
             return DoorHandleResult.OpenAccess;
 
-        // 2. Hack: powered + authentication disruptor (AccessBreaker / EmagType.Access).
-        //    Works even when bolted (NPC unbolts first). Never hack when bolted AND unpowered.
-        if (CanHack(owner) && powered && (!allowed || bolted))
-            return DoorHandleResult.Hack;
-
-        // 3. Pry unpowered unbolted doors.
-        if (!powered && !bolted && (TryFindPryTool(owner, out _) || doorComp.CanPry))
-            return DoorHandleResult.Pry;
-
-        // 4/5. Bolted + unpowered → breach only (no emag).
-        if (bolted && !powered)
+        // Bolted / locked: C4 first, else emag/access breaker. No pry/melee tool thinking.
+        if (bolted || !allowed)
         {
             if (TryFindBreachCharge(owner, out _))
                 return DoorHandleResult.BreachExplosive;
-            if (HasBreachMelee(owner))
-                return DoorHandleResult.BreachMelee;
+            if (CanHack(owner) && powered)
+                return DoorHandleResult.Hack;
             return DoorHandleResult.None;
         }
 
-        // Powered + bolted + has access but no emag: optional breach fallback.
-        if (bolted && powered && allowed && TryFindBreachCharge(owner, out _))
+        // Unpowered unbolted: emag useless — C4 only if we have it.
+        if (!powered && TryFindBreachCharge(owner, out _))
             return DoorHandleResult.BreachExplosive;
-
-        if (bolted && powered && allowed && HasBreachMelee(owner))
-            return DoorHandleResult.BreachMelee;
 
         return DoorHandleResult.None;
     }

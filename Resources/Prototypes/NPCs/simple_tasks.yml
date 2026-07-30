@@ -1,0 +1,17 @@
+# Simple role tasks: approach → progress bar / SFX → effect (wired via npcRoleProfile).
+
+- type: npcSimpleTask
+  id: DefibAlly
+  effect: DefibAlly
+  range: 1.5
+  duration: 1.75
+  sound: !type:SoundPathSpecifier
+    path: /Audio/Items/Medical/healthscanner.ogg
+
+- type: npcSimpleTask
+  id: BypassDoor
+  effect: BypassDoor
+  range: 1.5
+  duration: 2.0
+  sound: !type:SoundPathSpecifier
+    path: /Audio/Weapons/Guns/Triggers/empty.ogg

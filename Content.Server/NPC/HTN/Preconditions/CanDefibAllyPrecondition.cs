@@ -3,7 +3,7 @@ using Content.Server.NPC.Systems;
 namespace Content.Server.NPC.HTN.Preconditions;
 
 /// <summary>
-/// True when HealTarget is a revivable corpse ready for defib and the healer owns a stabilizer medipen.
+/// True when HealTarget is a revivable faction corpse and the healer owns a usable defib (medic).
 /// </summary>
 public sealed partial class CanDefibAllyPrecondition : HTNPrecondition
 {

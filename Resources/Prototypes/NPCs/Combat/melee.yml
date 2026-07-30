@@ -3,29 +3,6 @@
 - type: htnCompound
   id: MeleeCombatCompound
   branches:
-    - preconditions:
-        - !type:HasMatchingHealItemPrecondition
-          self: false
-          allowKits: false
-          allowMedipens: true
-          critAllyPensOnly: true
-      tasks:
-        - !type:HTNCompoundTask
-          task: CombatMedipenAllyCompound
-
-    - preconditions:
-        - !type:NeedsTreatableHealPrecondition
-          self: true
-          allowKits: false
-          allowMedipens: true
-        - !type:HasMatchingHealItemPrecondition
-          self: true
-          allowKits: false
-          allowMedipens: true
-      tasks:
-        - !type:HTNCompoundTask
-          task: CombatMedipenSelfCompound
-
     - tasks:
         - !type:HTNPrimitiveTask
           operator: !type:UtilityOperator

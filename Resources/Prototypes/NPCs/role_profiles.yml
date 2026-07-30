@@ -1,119 +1,34 @@
-- type: npcInventoryPolicy
-  id: CombatLoadout
-  maxKitStacks: 2
-  maxMedipens: 2
-  preferWeaponInHand: true
-  maxLooseAmmoStacks: 4
-  preferDefib: false
-  allowReagentContainers: false
-  preferLargerBackpack: true
-  weightWeapon: 80
-  weightAmmo: 60
-  weightMedKit: 40
-  weightMedipen: 35
-  weightDefib: 20
-  weightTool: 25
-  weightFood: 20
-  weightDrink: 20
-  weightInternals: 55
-  weightSurvivalKit: 35
-  weightBackpackUpgrade: 45
-
-- type: npcInventoryPolicy
-  id: MedicLoadout
-  maxKitStacks: 5
-  maxMedipens: 6
-  preferWeaponInHand: false
-  maxLooseAmmoStacks: 1
-  preferDefib: true
-  allowReagentContainers: false
-  preferLargerBackpack: true
-  weightWeapon: 25
-  weightAmmo: 15
-  weightMedKit: 70
-  weightMedipen: 65
-  weightDefib: 95
-  weightTool: 20
-  weightFood: 20
-  weightDrink: 20
-  weightInternals: 50
-  weightSurvivalKit: 40
-  weightBackpackUpgrade: 55
-
-- type: npcInventoryPolicy
-  id: EngineerLoadout
-  maxKitStacks: 1
-  maxMedipens: 1
-  preferWeaponInHand: false
-  maxLooseAmmoStacks: 1
-  preferDefib: false
-  allowReagentContainers: false
-  preferLargerBackpack: true
-  weightWeapon: 30
-  weightAmmo: 20
-  weightMedKit: 25
-  weightMedipen: 20
-  weightDefib: 10
-  weightTool: 75
-  weightFood: 20
-  weightDrink: 20
-  weightInternals: 55
-  weightSurvivalKit: 40
-  weightBackpackUpgrade: 50
-
-- type: npcInventoryPolicy
-  id: SecurityLoadout
-  maxKitStacks: 2
-  maxMedipens: 2
-  preferWeaponInHand: true
-  maxLooseAmmoStacks: 4
-  preferDefib: false
-  allowReagentContainers: false
-  preferLargerBackpack: true
-  weightWeapon: 85
-  weightAmmo: 65
-  weightMedKit: 35
-  weightMedipen: 30
-  weightDefib: 15
-  weightTool: 25
-  weightFood: 20
-  weightDrink: 20
-  weightInternals: 50
-  weightSurvivalKit: 30
-  weightBackpackUpgrade: 45
-
-- type: npcChemKnowledge
-  id: CombatMeds
-  families:
-    - brute
-    - burn
-    - toxin
-    - airloss
-    - stabilizer
-    - combat
-    - radiation
+# Thin role profiles for the NPC editor (no inventory/chem policies).
 
 - type: npcRoleProfile
   id: SyndicateFootsoldier
-  inventoryPolicy: CombatLoadout
-  chemKnowledge: CombatMeds
+  canDefib: false
+  canBypassDoor: true
+  tasks:
+  - BypassDoor
 
 - type: npcRoleProfile
   id: StationMedic
-  inventoryPolicy: MedicLoadout
-  chemKnowledge: CombatMeds
+  canDefib: true
+  canBypassDoor: false
+  tasks:
+  - DefibAlly
 
 - type: npcRoleProfile
   id: StationEngineer
-  inventoryPolicy: EngineerLoadout
-  chemKnowledge: CombatMeds
+  canDefib: false
+  canBypassDoor: true
+  tasks:
+  - BypassDoor
 
 - type: npcRoleProfile
   id: StationSecurity
-  inventoryPolicy: SecurityLoadout
-  chemKnowledge: CombatMeds
+  canDefib: false
+  canBypassDoor: true
+  tasks:
+  - BypassDoor
 
-# Compact starting gear for spawnable crew-like NPC agents.
+# Compact starting gear — medic always carries a defib in the bag.
 - type: startingGear
   id: NpcMedicGear
   equipment:
@@ -123,8 +38,6 @@
     id: MedicalPDA
     ears: ClothingHeadsetMedical
     belt: ClothingBeltMedicalFilled
-    pocket1: EmergencyMedipen
-    pocket2: Brutepack
   storage:
     back:
     - DefibrillatorCompact
@@ -139,8 +52,8 @@
     id: EngineeringPDA
     ears: ClothingHeadsetEngineering
     belt: ClothingBeltUtilityEngineering
-    pocket1: Welder
-    pocket2: Crowbar
+    pocket1: Emag
+    pocket2: C4
   storage:
     back:
     - BoxSurvival
@@ -155,8 +68,7 @@
     id: SecurityPDA
     ears: ClothingHeadsetSecurity
     belt: ClothingBeltSecurityFilled
-    pocket1: Handcuffs
-    pocket2: Stunbaton
   storage:
     back:
     - BoxSurvival
+    - C4

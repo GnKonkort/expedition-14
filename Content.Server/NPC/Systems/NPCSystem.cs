@@ -66,7 +66,6 @@ namespace Content.Server.NPC.Systems
         public void OnNPCMapInit(EntityUid uid, HTNComponent component, MapInitEvent args)
         {
             component.Blackboard.SetValue(NPCBlackboard.Owner, uid);
-            EnsureComp<NPCNeedComponent>(uid);
             WakeNPC(uid, component);
         }
 

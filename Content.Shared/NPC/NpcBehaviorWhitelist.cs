@@ -1,7 +1,7 @@
 namespace Content.Shared.NPC;
 
 /// <summary>
-/// Curated HTN / role defaults for the custom NPC editor. Not a freeform AI graph.
+/// Curated HTN / role defaults for the custom NPC editor.
 /// </summary>
 public static class NpcBehaviorWhitelist
 {
@@ -14,14 +14,11 @@ public static class NpcBehaviorWhitelist
             ],
             [NpcBehaviorPack.Civilian] =
             [
-                "HumanoidMedicCompound",
-                "HumanoidEngineerCompound",
                 "HumanoidAgentCompound",
             ],
             [NpcBehaviorPack.Combat] =
             [
                 "SimpleHumanoidHostileCompound",
-                "HumanoidSecurityCompound",
                 "HumanoidAgentCompound",
             ],
         };
@@ -45,6 +42,7 @@ public static class NpcBehaviorWhitelist
             [
                 "SyndicateFootsoldier",
                 "StationSecurity",
+                "StationMedic",
             ],
         };
 
@@ -68,7 +66,7 @@ public static class NpcBehaviorWhitelist
         new Dictionary<NpcBehaviorPack, string>
         {
             [NpcBehaviorPack.Basic] = "HumanoidAgentCompound",
-            [NpcBehaviorPack.Civilian] = "HumanoidMedicCompound",
+            [NpcBehaviorPack.Civilian] = "HumanoidAgentCompound",
             [NpcBehaviorPack.Combat] = "SimpleHumanoidHostileCompound",
         };
 

@@ -1,5 +1,7 @@
 using Content.Server.NPC.Components;
 using Content.Shared.CombatMode;
+using Content.Shared.Cover;
+using Content.Shared.Hands.EntitySystems;
 using Content.Shared.Interaction;
 using Content.Shared.Physics;
 using Content.Shared.Weapons.Ranged.Components;
@@ -13,6 +15,7 @@ namespace Content.Server.NPC.Systems;
 public sealed partial class NPCCombatSystem
 {
     [Dependency] private readonly SharedCombatModeSystem _combat = default!;
+    [Dependency] private readonly SharedHandsSystem _hands = default!;
     [Dependency] private readonly RotateToFaceSystem _rotate = default!;
 
     private EntityQuery<CombatModeComponent> _combatQuery;
@@ -20,6 +23,8 @@ public sealed partial class NPCCombatSystem
     private EntityQuery<RechargeBasicEntityAmmoComponent> _rechargeQuery;
     private EntityQuery<PhysicsComponent> _physicsQuery;
     private EntityQuery<TransformComponent> _xformQuery;
+    private EntityQuery<DirectionalCoverComponent> _directionalCoverQuery;
+    private EntityQuery<ProbabilisticCoverComponent> _probCoverQuery;
 
     // TODO: Don't predict for hitscan
     private const float ShootSpeed = 20f;
@@ -36,6 +41,8 @@ public sealed partial class NPCCombatSystem
         _rechargeQuery = GetEntityQuery<RechargeBasicEntityAmmoComponent>();
         _steeringQuery = GetEntityQuery<NPCSteeringComponent>();
         _xformQuery = GetEntityQuery<TransformComponent>();
+        _directionalCoverQuery = GetEntityQuery<DirectionalCoverComponent>();
+        _probCoverQuery = GetEntityQuery<ProbabilisticCoverComponent>();
 
         SubscribeLocalEvent<NPCRangedCombatComponent, ComponentStartup>(OnRangedStartup);
         SubscribeLocalEvent<NPCRangedCombatComponent, ComponentShutdown>(OnRangedShutdown);
@@ -99,7 +106,14 @@ public sealed partial class NPCCombatSystem
                 _combat.SetInCombatMode(uid, true, combatMode);
             }
 
-            if (!_gun.TryGetGun(uid, out var gunUid, out var gun))
+            // Any held gun (not only active hand) — then select it so AttemptShoot works.
+            EntityUid gunUid;
+            GunComponent? gun;
+            if (_gunAmmo.TryGetHeldGun(uid, out gunUid, out gun))
+            {
+                _hands.TrySelect(uid, gunUid);
+            }
+            else if (!_gun.TryGetGun(uid, out gunUid, out gun))
             {
                 comp.Status = CombatStatus.NoWeapon;
                 comp.ShootAccumulator = 0f;
@@ -108,6 +122,9 @@ public sealed partial class NPCCombatSystem
 
             // Rifles/shotguns with GunRequiresWield need both hands occupied.
             _gunAmmo.TryEnsureWielded(uid, gunUid);
+
+            // Chamber-mag guns open the bolt when empty — close/rack before ammo checks.
+            _gunAmmo.EnsureChamberReady(gunUid, uid);
 
             var ammoEv = new GetAmmoCountEvent();
             RaiseLocalEvent(gunUid, ref ammoEv);
@@ -120,7 +137,14 @@ public sealed partial class NPCCombatSystem
                     continue;
                 }
 
-                comp.Status = CombatStatus.Unspecified;
+                // Empty: start/wait Hidden DoAfter illusion reload (refill + bolt on finish).
+                // Keep Status=Normal so GunOperator does not Fail on Unspecified.
+                if (_gunAmmo.IsIllusionReloading(uid) || _gunAmmo.TryStartIllusionReload(uid, gunUid))
+                {
+                    comp.ShootAccumulator = 0f;
+                    continue;
+                }
+
                 comp.ShootAccumulator = 0f;
                 continue;
             }
@@ -149,7 +173,15 @@ public sealed partial class NPCCombatSystem
 
                 // For consistency with NPC steering.
                 var collisionGroup = comp.UseOpaqueForLOSChecks ? CollisionGroup.Opaque : (CollisionGroup.Impassable | CollisionGroup.InteractImpassable);
-                comp.TargetInLOS = _interaction.InRangeUnobstructed(uid, comp.Target, distance + 0.1f, collisionGroup);
+                // Soft cover is always shoot-through for aim LOS (Opaque is only for bolt physics).
+                // Side-dependent block chance must not prevent trying to fire.
+                SharedInteractionSystem.Ignored softCoverPredicate = IsSoftCoverEntity;
+                comp.TargetInLOS = _interaction.InRangeUnobstructed(
+                    (uid, xform),
+                    (comp.Target, targetXform),
+                    distance + 0.1f,
+                    collisionGroup,
+                    softCoverPredicate);
             }
 
             if (!comp.TargetInLOS)
@@ -223,5 +255,13 @@ public sealed partial class NPCCombatSystem
             // (NPCSquadFriendlyFireSystem + GunSystem hitscan skip) — still fire.
             _gun.AttemptShoot(uid, gunUid, gun, targetCordinates, comp.Target);
         }
+    }
+
+    /// <summary>
+    /// Soft cover (cades / tables) is Opaque for projectile physics only — always ignore for aim LOS.
+    /// </summary>
+    private bool IsSoftCoverEntity(EntityUid hit)
+    {
+        return _directionalCoverQuery.HasComponent(hit) || _probCoverQuery.HasComponent(hit);
     }
 }

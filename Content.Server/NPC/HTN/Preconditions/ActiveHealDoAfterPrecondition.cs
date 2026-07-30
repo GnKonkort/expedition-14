@@ -3,8 +3,7 @@ using Content.Server.NPC.Systems;
 namespace Content.Server.NPC.HTN.Preconditions;
 
 /// <summary>
-/// True while the owner has an active kit healing do-after.
-/// Used to pin HTN on waiting so ConstantlyReplan does not abort healing for combat branches.
+/// True while a kit healing do-after is running on the NPC.
 /// </summary>
 public sealed partial class ActiveHealDoAfterPrecondition : HTNPrecondition
 {

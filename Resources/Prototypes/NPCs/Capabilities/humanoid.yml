@@ -1,44 +1,11 @@
-# Capability compounds for modular humanoid NPC agents.
-
-- type: htnCompound
-  id: AtmosFleeCompound
-  branches:
-    - preconditions:
-        - !type:KeyBoolEqualsPrecondition
-          key: NeedSeekAtmosphere
-          value: true
-      tasks:
-        - !type:HTNPrimitiveTask
-          operator: !type:PickAtmosFleeOperator
-
-        - !type:HTNPrimitiveTask
-          operator: !type:MoveToOperator
-            pathfindInPlanning: true
-            removeKeyOnFinish: true
-            targetKey: TargetCoordinates
-            rangeKey: MovementRange
+# Capability compounds for modular humanoid NPC agents (combat-first, dumb illusions).
 
 - type: htnCompound
   id: AccessBypassCompound
   branches:
-    - preconditions:
-        - !type:KeyBoolEqualsPrecondition
-          key: NeedDoorBlocked
-          value: true
-      tasks:
+    - tasks:
         - !type:HTNPrimitiveTask
           operator: !type:BypassDoorOperator
-
-- type: htnCompound
-  id: InventoryPolicyCompound
-  branches:
-    - preconditions:
-        - !type:KeyBoolEqualsPrecondition
-          key: NeedHasHostile
-          value: true
-      tasks:
-        - !type:HTNPrimitiveTask
-          operator: !type:EnforceInventoryPolicyOperator
 
 - type: htnCompound
   id: GrenadeCombatCompound
@@ -52,13 +19,13 @@
             targetKey: Target
 
 # Canonical humanoid agent root — priority ladder.
-# Optional capability compounds MUST fail closed in Plan() or they starve combat.
+# Medics (own a defib) revive/heal faction allies before combat when work is available.
 - type: htnCompound
   id: HumanoidAgentCompound
   branches:
     - tasks:
         - !type:HTNCompoundTask
-          task: AtmosFleeCompound
+          task: WaitDefibDoAfterCompound
 
     - tasks:
         - !type:HTNCompoundTask
@@ -66,11 +33,15 @@
 
     - tasks:
         - !type:HTNCompoundTask
-          task: WaitDefibDoAfterCompound
+          task: HealCorpseCompound
 
     - tasks:
         - !type:HTNCompoundTask
-          task: InventoryPolicyCompound
+          task: DefibAllyCompound
+
+    - tasks:
+        - !type:HTNCompoundTask
+          task: HealAllyCompound
 
     - preconditions:
         - !type:PreferCloseMeleePrecondition
@@ -88,35 +59,8 @@
 
     - tasks:
         - !type:HTNCompoundTask
-          task: HealSelfKitCompound
-    - tasks:
-        - !type:HTNCompoundTask
-          task: HealDeadAllyKitCompound
-    - tasks:
-        - !type:HTNCompoundTask
-          task: DefibAllyCompound
-    - tasks:
-        - !type:HTNCompoundTask
-          task: CombatMedipenAllyCompound
-    - tasks:
-        - !type:HTNCompoundTask
-          task: HealAllyKitCompound
-    - tasks:
-        - !type:HTNCompoundTask
-          task: DiscardEmptyMedipenCompound
-
-    # Loot / drop / bag upgrade (includes med stocking)
-    - tasks:
-        - !type:HTNCompoundTask
-          task: InventoryManageCompound
-
-    - tasks:
-        - !type:HTNCompoundTask
-          task: FoodCompound
-
-    - tasks:
-        - !type:HTNCompoundTask
           task: AccessBypassCompound
+
     - tasks:
         - !type:HTNCompoundTask
           task: SquadRallyCompound
@@ -124,11 +68,12 @@
     - tasks:
         - !type:HTNCompoundTask
           task: PeaceStowCompound
+
     - tasks:
         - !type:HTNCompoundTask
           task: IdleCompound
 
-# Back-compat alias — nest the canonical root (no duplicated branches).
+# Back-compat alias
 - type: htnCompound
   id: SimpleHumanoidHostileCompound
   branches:

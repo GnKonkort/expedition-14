@@ -306,19 +306,7 @@ public sealed class NpcPresetSystem : EntitySystem
 
     private void ApplyRoleBlackboard(EntityUid uid, ProtoId<NpcRoleProfilePrototype> profileId)
     {
-        EnsureComp<NPCNeedComponent>(uid);
-
-        if (!_proto.TryIndex(profileId, out NpcRoleProfilePrototype? profile))
-            return;
-
-        if (!TryComp<HTNComponent>(uid, out var htn))
-            return;
-
-        if (profile.InventoryPolicy is { } inv)
-            htn.Blackboard.SetValue(NPCBlackboard.InventoryPolicy, inv.Id);
-
-        if (profile.ChemKnowledge is { } chem)
-            htn.Blackboard.SetValue(NPCBlackboard.ChemKnowledge, chem.Id);
+        EntityManager.System<NPCRoleSystem>().ApplyProfile(uid, profileId);
     }
 }
 

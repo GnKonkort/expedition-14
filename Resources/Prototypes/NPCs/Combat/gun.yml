@@ -89,15 +89,47 @@
 - type: htnCompound
   id: RangedEngageCompound
   branches:
+    # Soft cover first when available (PickCover fails closed → next branch).
     - tasks:
         - !type:HTNCompoundTask
           task: SeekCoverCompound
     - tasks:
         - !type:HTNCompoundTask
           task: HoldRangeCompound
+    # No cover / hold point: close to LOS and shoot.
+    - tasks:
+        - !type:HTNCompoundTask
+          task: DirectGunEngageCompound
     - tasks:
         - !type:HTNCompoundTask
           task: LegacyGunJukeCompound
+
+# Move into LOS at ranged range, then keep shooting.
+- type: htnCompound
+  id: DirectGunEngageCompound
+  branches:
+    - tasks:
+        - !type:HTNPrimitiveTask
+          operator: !type:MoveToOperator
+            shutdownState: PlanFinished
+            pathfindInPlanning: true
+            removeKeyOnFinish: false
+            targetKey: TargetCoordinates
+            pathfindKey: TargetPathfind
+            stopOnLineOfSight: true
+            rangeKey: RangedRange
+
+        - !type:HTNPrimitiveTask
+          preconditions:
+            - !type:KeyExistsPrecondition
+              key: Target
+          operator: !type:GunOperator
+            targetKey: Target
+          services:
+            - !type:UtilityService
+              id: RangedService
+              proto: NearbyGunTargets
+              key: Target
 
 # Tries to shoot a target at range.
 - type: htnCompound
@@ -129,94 +161,6 @@
 
         - !type:HTNCompoundTask
           task: RangedEngageCompound
-
-# Selects compatible ammo in range, then moves to it and picks it up (reload is attempted in the pickup Update).
-- type: htnCompound
-  id: PickupAmmoCompound
-  branches:
-    - tasks:
-        - !type:HTNPrimitiveTask
-          operator: !type:PickupCompatibleAmmoOperator
-            pickup: false
-
-        - !type:HTNPrimitiveTask
-          operator: !type:MoveToOperator
-
-        - !type:HTNPrimitiveTask
-          preconditions:
-            - !type:TargetInRangePrecondition
-              targetKey: Target
-              rangeKey: InteractRange
-          operator: !type:PickupCompatibleAmmoOperator
-            pickup: true
-
-# Loot a nearby bag/belt (sampled ≤10) for compatible ammo (reload attempted in loot Update).
-- type: htnCompound
-  id: LootNearbyAmmoStorageCompound
-  branches:
-    - tasks:
-        - !type:HTNPrimitiveTask
-          operator: !type:LootNearbyAmmoStorageOperator
-            takeItem: false
-
-        - !type:HTNPrimitiveTask
-          operator: !type:MoveToOperator
-
-        - !type:HTNPrimitiveTask
-          preconditions:
-            - !type:TargetInRangePrecondition
-              targetKey: Target
-              rangeKey: InteractRange
-          operator: !type:LootNearbyAmmoStorageOperator
-            takeItem: true
-
-# One inventory fill step for incomplete mags (seated or spare).
-- type: htnCompound
-  id: FillCompatibleMagazinesCompound
-  branches:
-    - tasks:
-        - !type:HTNPrimitiveTask
-          operator: !type:FillMagazineOperator
-
-# Stock up to combat minimum: discard empty boxes / drained disposable cells, fill mags, top off tubes, loot floor ammo.
-- type: htnCompound
-  id: StockAmmoCompound
-  branches:
-    - preconditions:
-        - !type:HasEmptyCompatibleAmmoBoxPrecondition
-      tasks:
-        - !type:HTNPrimitiveTask
-          operator: !type:DiscardEmptyAmmoBoxOperator
-
-    - preconditions:
-        - !type:InventoryHasMagazineFillMaterialPrecondition
-      tasks:
-        - !type:HTNCompoundTask
-          task: FillCompatibleMagazinesCompound
-
-    - preconditions:
-        - !type:NeedsBallisticTubeFillPrecondition
-      tasks:
-        - !type:HTNPrimitiveTask
-          operator: !type:ReloadHeldGunOperator
-
-    - preconditions:
-        - !type:NearbyMatchingAmmoPrecondition
-      tasks:
-        - !type:HTNCompoundTask
-          task: PickupAmmoCompound
-
-# Reload held gun from inventory (insert first, then fill incomplete mags).
-- type: htnCompound
-  id: SelfReloadCompound
-  branches:
-    - tasks:
-        - !type:HTNPrimitiveTask
-          operator: !type:ReloadHeldGunOperator
-
-    - tasks:
-        - !type:HTNCompoundTask
-          task: FillCompatibleMagazinesCompound
 
 # Selects a gun in range, then moves to it and picks it up.
 - type: htnCompound
@@ -251,70 +195,31 @@
           task: GunCombatCompound
 
 
+# Combat-first ranged AI: fight, illusion-reload when empty (no ammo loot/stock).
 - type: htnCompound
   id: RangedCombatCompound
   branches:
-    # 0. Emergency medipen on critical allies
-    - preconditions:
-        - !type:HasMatchingHealItemPrecondition
-          self: false
-          allowKits: false
-          allowMedipens: true
-          critAllyPensOnly: true
-      tasks:
-        - !type:HTNCompoundTask
-          task: CombatMedipenAllyCompound
-
-    # 0b. Combat medipen when treatable self-damage > 15 and a matching pen is owned
-    - preconditions:
-        - !type:NeedsTreatableHealPrecondition
-          self: true
-          allowKits: false
-          allowMedipens: true
-        - !type:HasMatchingHealItemPrecondition
-          self: true
-          allowKits: false
-          allowMedipens: true
-      tasks:
-        - !type:HTNCompoundTask
-          task: CombatMedipenSelfCompound
-
-    # 1. Insert spare mag when slot empty/spent (even if chamber still has a round)
+    # Fight when gun has ammo (highest priority)
     - preconditions:
         - !type:OwnedGunPrecondition
-        - !type:AmmoSearchReadyPrecondition
-        - !type:NeedsMagazineInsertPrecondition
+        - !type:GunAmmoPrecondition
+          minPercent: 0.001
+        - !type:NearbyHostilesPrecondition
+      tasks:
+        - !type:HTNCompoundTask
+          task: GunCombatCompound
+
+    # Empty gun: illusion reload (auto-refill + SFX), no inventory loot
+    - preconditions:
+        - !type:OwnedGunPrecondition
+        - !type:GunAmmoPrecondition
+          maxPercent: 0.001
+        - !type:NearbyHostilesPrecondition
       tasks:
         - !type:HTNPrimitiveTask
           operator: !type:ReloadHeldGunOperator
 
-    # 1b. Insert / upgrade power cell for energy guns
-    - preconditions:
-        - !type:OwnedGunPrecondition
-        - !type:AmmoSearchReadyPrecondition
-        - !type:NeedsPowerCellInsertPrecondition
-      tasks:
-        - !type:HTNPrimitiveTask
-          operator: !type:ReloadHeldGunOperator
-
-    # 1c. Empty external-charge energy gun with no portable recharger → discard
-    - preconditions:
-        - !type:OwnedGunPrecondition
-        - !type:ShouldDiscardEnergyGunPrecondition
-      tasks:
-        - !type:HTNPrimitiveTask
-          operator: !type:DiscardUnusableEnergyGunOperator
-
-    # 1d. Empty energy gun: holster/dock for recharge, then fall through to melee / other tasks
-    #     (do NOT idle-wait — NeedsEnergyChargeWait only blocks ranged use until full)
-    - preconditions:
-        - !type:OwnedGunPrecondition
-        - !type:NeedsStowEnergyGunForChargePrecondition
-      tasks:
-        - !type:HTNPrimitiveTask
-          operator: !type:StowEnergyGunForChargeOperator
-
-    # 1e. Opportunistic grenade throw (optional branch — fails soft into gun fight)
+    # Opportunistic grenade after guns
     - preconditions:
         - !type:NearbyHostilesPrecondition
       tasks:
@@ -325,54 +230,18 @@
         - !type:HTNCompoundTask
           task: GrenadeCombatCompound
 
-    # 2. Fight when stocked (draw happens inside GunCombatCompound)
+    # Fight under melee pressure
     - preconditions:
         - !type:OwnedGunPrecondition
         - !type:GunAmmoPrecondition
           minPercent: 0.001
-        - !type:NeedsEnergyChargeWaitPrecondition
-          invert: true
-        - !type:NeedsAmmoStockPrecondition
-          invert: true
-        - !type:NearbyHostilesPrecondition
-      tasks:
-        - !type:HTNCompoundTask
-          task: GunCombatCompound
-
-    # 3. Fight under melee pressure even if still stocking
-    - preconditions:
-        - !type:OwnedGunPrecondition
-        - !type:GunAmmoPrecondition
-          minPercent: 0.001
-        - !type:NeedsEnergyChargeWaitPrecondition
-          invert: true
         - !type:NearbyHostilesPrecondition
           rangeKey: MeleeRange
       tasks:
         - !type:HTNCompoundTask
           task: GunCombatCompound
 
-    # 4. Stock ammo to minimum before seeking a fight
-    - preconditions:
-        - !type:OwnedGunPrecondition
-        - !type:AmmoSearchReadyPrecondition
-        - !type:NeedsAmmoStockPrecondition
-      tasks:
-        - !type:HTNCompoundTask
-          task: StockAmmoCompound
-
-    # 5. Self-reload from inventory when empty
-    - preconditions:
-        - !type:OwnedGunPrecondition
-        - !type:GunAmmoPrecondition
-          maxPercent: 0.001
-        - !type:AmmoSearchReadyPrecondition
-        - !type:InventoryHasReloadMaterialPrecondition
-      tasks:
-        - !type:HTNCompoundTask
-          task: SelfReloadCompound
-
-    # 6. Pickup gun with ammo if we have no owned gun on body
+    # No owned gun → pick one up if nearby
     - preconditions:
         - !type:OwnedGunPrecondition
           invert: true
@@ -380,48 +249,7 @@
         - !type:HTNCompoundTask
           task: PickupGunCompound
 
-    # 7. Empty gun + matching ammo on floor
-    - preconditions:
-        - !type:OwnedGunPrecondition
-        - !type:GunAmmoPrecondition
-          maxPercent: 0.001
-        - !type:AmmoSearchReadyPrecondition
-        - !type:NearbyMatchingAmmoPrecondition
-      tasks:
-        - !type:HTNCompoundTask
-          task: PickupAmmoCompound
-
-    # 8. Empty gun + matching ammo in nearby bags
-    - preconditions:
-        - !type:OwnedGunPrecondition
-        - !type:GunAmmoPrecondition
-          maxPercent: 0.001
-        - !type:AmmoSearchReadyPrecondition
-        - !type:NearbyAmmoStoragePrecondition
-      tasks:
-        - !type:HTNCompoundTask
-          task: LootNearbyAmmoStorageCompound
-
-    # 9. Empty gun + alternate loadout nearby → drop and switch
-    - preconditions:
-        - !type:HeldGunPrecondition
-        - !type:GunAmmoPrecondition
-          maxPercent: 0.001
-        - !type:AmmoSearchReadyPrecondition
-        - !type:NearbyAlternateLoadoutPrecondition
-        - !type:NearbyMatchingAmmoPrecondition
-          invert: true
-        - !type:AmmoLogisticsPotentialPrecondition
-          invert: true
-      tasks:
-        - !type:HTNPrimitiveTask
-          preconditions:
-            - !type:ActiveHandEntityPrecondition
-          operator: !type:DropOperator
-        - !type:HTNCompoundTask
-          task: PickupGunCompound
-
-    # 10. Empty gun + nothing useful → holster (never discard onto the floor)
+    # Peace: holster when empty and safe
     - preconditions:
         - !type:HeldGunPrecondition
         - !type:GunAmmoPrecondition
@@ -429,18 +257,11 @@
         - !type:NearbyHostilesPrecondition
           invert: true
           rangeKey: MeleeRange
-        - !type:NearbyMatchingAmmoPrecondition
-          invert: true
-        - !type:AmmoLogisticsPotentialPrecondition
-          invert: true
-        - !type:ShouldDiscardEnergyGunPrecondition
-          invert: true
       tasks:
         - !type:HTNPrimitiveTask
           operator: !type:StowPeaceEquipmentOperator
 
-# After PeaceStowDelaySeconds without hostiles: holster gun, stow held ammo,
-# and for power-cell guns restore self-recharging cells / discard disposable spares.
+# After PeaceStowDelaySeconds without hostiles: holster gun.
 - type: htnCompound
   id: PeaceStowCompound
   branches:

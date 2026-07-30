@@ -1,18 +1,22 @@
-using Content.Server.NPC.HTN;
 using Content.Server.NPC.Systems;
 
 namespace Content.Server.NPC.HTN.Preconditions;
 
 /// <summary>
-/// True when inventory logistics should run (useful loot, excess, bag upgrade, missing defib).
+/// True when the owner carries a defibrillator (current medic definition).
 /// </summary>
-public sealed partial class InventoryManageNeededPrecondition : HTNPrecondition
+public sealed partial class OwnedDefibPrecondition : HTNPrecondition
 {
     [Dependency] private readonly IEntityManager _entManager = default!;
 
+    [DataField]
+    public bool Invert;
+
     public override bool IsMet(NPCBlackboard blackboard)
     {
+        var medical = _entManager.System<NPCMedicalSystem>();
         var owner = blackboard.GetValue<EntityUid>(NPCBlackboard.Owner);
-        return _entManager.System<NPCInventoryManagerSystem>().NeedsInventoryManage(owner, blackboard);
+        var owns = medical.IsMedic(owner);
+        return Invert ? !owns : owns;
     }
 }

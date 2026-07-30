@@ -36,6 +36,11 @@ public sealed partial class UseDefibOperator : HTNOperator
     public override void TaskShutdown(NPCBlackboard blackboard, HTNOperatorStatus status)
     {
         blackboard.Remove<ushort>(CurrentDoAfterKey);
+
+        // After zap (or abort), put the defib away unless another zap do-after is still running.
+        var medical = _entManager.System<NPCMedicalSystem>();
+        var owner = blackboard.GetValue<EntityUid>(NPCBlackboard.Owner);
+        medical.TryStowHeldDefib(owner);
     }
 
     public override HTNOperatorStatus Update(NPCBlackboard blackboard, float frameTime)

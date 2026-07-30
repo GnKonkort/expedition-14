@@ -87,6 +87,7 @@ public sealed partial class GunOperator : HTNOperator, IHtnConditionalShutdown
         {
             // Clear charge-wait when resuming fire with a full gun (Plan cannot mutate read-only BB).
             ammo.TryClearEnergyChargeWaitIfReady(gun, blackboard);
+            ammo.TryDrawOwnedGun(owner, gun);
             ammo.TryEnsureWielded(owner, gun);
         }
 
