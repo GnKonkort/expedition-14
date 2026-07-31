@@ -1,8 +1,8 @@
 ﻿[game]
 # Straight in-game baby
 lobbyenabled = false
-# Frontier: special map
-map = "NFDev"
+# Local SubGrid / vehicle hangar test map
+map = "VehicleHangar"
 role_timers = false
 
 [events]

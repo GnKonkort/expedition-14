@@ -146,9 +146,19 @@ public sealed partial class StationSystem : SharedStationSystem
 
         if (!dict.Any())
         {
-            // Oh jeez, no stations got loaded.
-            // We'll yell about it, but the thing this used to do with creating a dummy is kinda pointless now.
-            _sawmill.Error($"There were no station grids for {ev.GameMap.ID}!");
+            // Mapping-saved grids often omit BecomesStation. Fall back to the gameMap station config
+            // so debug/dev maps still produce a station instead of crashing job assignment.
+            if (ev.Grids.Count > 0 && ev.GameMap.Stations.Count > 0)
+            {
+                var stationId = ev.GameMap.Stations.Keys.First();
+                dict.GetOrNew(stationId).AddRange(ev.Grids);
+                _sawmill.Warning(
+                    $"No BecomesStation on grids for {ev.GameMap.ID}; assigning {ev.Grids.Count} grid(s) to '{stationId}'.");
+            }
+            else
+            {
+                _sawmill.Error($"There were no station grids for {ev.GameMap.ID}!");
+            }
         }
 
         foreach (var (id, gridIds) in dict)

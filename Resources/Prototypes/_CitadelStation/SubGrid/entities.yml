@@ -1,0 +1,222 @@
+- type: entity
+  parent: BaseMachinePowered
+  id: SubGridPad
+  name: sub-grid fabricator
+  description: Consumes 5 steel and 5 uranium sheets from its slots to extrude a small antigrav vehicle pad. Click with sheets to fill either material slot.
+  placement:
+    mode: SnapgridCenter
+  components:
+  - type: Sprite
+    sprite: Structures/Machines/gravity_generator_mini.rsi
+    noRot: false
+    layers:
+    - state: on
+  - type: Transform
+    noRot: false
+    anchored: true
+  - type: ApcPowerReceiver
+    powerLoad: 200
+  - type: ExtensionCableReceiver
+  - type: SubGridPad
+  - type: ItemSlots
+    slots:
+      steel_slot:
+        name: subgrid-pad-slot-steel
+        insertOnInteract: true
+        ejectOnInteract: false
+        whitelist:
+          tags:
+          - Sheet
+      uranium_slot:
+        name: subgrid-pad-slot-uranium
+        insertOnInteract: true
+        ejectOnInteract: false
+        whitelist:
+          tags:
+          - Sheet
+  - type: ContainerContainer
+    containers:
+      steel_slot: !type:ContainerSlot
+        showEnts: False
+      uranium_slot: !type:ContainerSlot
+        showEnts: False
+  - type: InteractionOutline
+  - type: Destructible
+    thresholds:
+    - trigger:
+        !type:DamageTrigger
+        damage: 200
+      behaviors:
+      - !type:DoActsBehavior
+        acts: [ "Destruction" ]
+  - type: StaticPrice
+    price: 1500
+
+- type: entity
+  parent: BaseMachine
+  id: SubGridAntigrav
+  name: antigrav core
+  description: Keeps a sub-grid coherent. Activate to engage drive; alt-click to cycle movement mode. Pilot via the shuttle console.
+  components:
+  - type: Sprite
+    sprite: Structures/Machines/gravity_generator_mini.rsi
+    layers:
+    - state: on
+  - type: Transform
+    anchored: true
+  - type: Physics
+    bodyType: Static
+  - type: Fixtures
+    fixtures:
+      fix1:
+        shape:
+          !type:PhysShapeAabb
+          bounds: "-0.35,-0.35,0.35,0.35"
+        density: 60
+        hard: true
+        mask:
+        - MachineMask
+        layer:
+        - MidImpassable
+        - LowImpassable
+  - type: SubGridAntigrav
+  - type: InteractionOutline
+  - type: Clickable
+  - type: Damageable
+    damageContainer: StructuralInorganic
+    damageModifierSet: StructuralMetallic
+  - type: Destructible
+    thresholds:
+    - trigger:
+        !type:DamageTrigger
+        damage: 150
+      behaviors:
+      - !type:DoActsBehavior
+        acts: [ "Breakage" ]
+    - trigger:
+        !type:DamageTrigger
+        damage: 300
+      behaviors:
+      - !type:DoActsBehavior
+        acts: [ "Destruction" ]
+
+- type: entity
+  parent: Stairs
+  id: SubGridStairs
+  name: boarding steps
+  description: Steps used to board or leave a sub-grid vehicle safely.
+  components:
+  - type: Sprite
+    sprite: Structures/stairs.rsi
+    state: stairs_steel
+    drawdepth: HighFloorObjects
+  - type: SubGridAccess
+
+# Shuttle console for SubGrid piloting — no APC required; hard fixture like a normal console.
+- type: entity
+  parent: BaseComputerShuttle
+  id: SubGridConsole
+  name: sub-grid console
+  description: Pilots the antigrav pad like a shuttle once the drive is engaged.
+  components:
+  - type: Sprite
+    layers:
+    - map: ["computerLayerBody"]
+      state: computer
+    - map: ["computerLayerKeyboard"]
+      state: generic_keyboard
+    - map: ["computerLayerScreen"]
+      state: shuttle
+    - map: ["computerLayerKeys"]
+      state: generic_keys
+    - map: [ "enum.WiresVisualLayers.MaintenancePanel" ]
+      state: generic_panel_open
+  - type: Computer
+    board: ShuttleConsoleCircuitboard
+  - type: ApcPowerReceiver
+    needsPower: false
+    powerLoad: 0
+  - type: InteractionOutline
+  - type: Clickable
+
+# Linear thruster for SubGrid — same thrust profile as a normal thruster; no space/APC needed.
+- type: entity
+  parent: BaseThruster
+  id: SubGridThruster
+  name: sub-grid thruster
+  description: Compact thruster for an antigrav pad. Does not need space exposure or power.
+  components:
+  - type: Thruster
+    requireSpace: false
+  - type: ApcPowerReceiver
+    needsPower: false
+    powerLoad: 0
+  - type: Transform
+    anchored: true
+  - type: Physics
+    bodyType: Static
+  - type: Sprite
+    sprite: _NF/Structures/Shuttles/thruster.rsi
+    layers:
+    - state: base
+      map: ["enum.ThrusterVisualLayers.Base"]
+    - state: thrust
+      map: ["enum.ThrusterVisualLayers.ThrustOn"]
+      shader: unshaded
+      visible: false
+    - state: thrust_burn_unshaded
+      map: ["enum.ThrusterVisualLayers.ThrustingUnshaded"]
+      shader: unshaded
+      visible: false
+      offset: 0, 1
+
+# Angular thruster — same defaults as DebugGyroscope.
+- type: entity
+  parent: BaseThruster
+  id: SubGridGyroscope
+  name: sub-grid gyroscope
+  description: Provides yaw control for an antigrav pad.
+  components:
+  - type: Thruster
+    thrusterType: Angular
+    requireSpace: false
+    baseThrust: 100
+    thrust: 100
+  - type: ApcPowerReceiver
+    needsPower: false
+    powerLoad: 0
+  - type: Transform
+    anchored: true
+  - type: Physics
+    bodyType: Static
+  - type: Sprite
+    sprite: _NF/Structures/Shuttles/gyroscope.rsi
+    snapCardinals: true
+    layers:
+    - state: base
+      map: ["enum.ThrusterVisualLayers.Base"]
+    - state: thrust
+      map: ["enum.ThrusterVisualLayers.ThrustOn"]
+      shader: unshaded
+      visible: false
+    - state: thrust_burn_unshaded
+      map: ["enum.ThrusterVisualLayers.ThrustingUnshaded"]
+      shader: unshaded
+      visible: false
+
+# Invisible Kinematic boarding barrier — one per floor tile, follows SubGrid parent.
+# Unanchored so it cannot re-parent onto the station underneath.
+- type: entity
+  id: SubGridPerimeterBlocker
+  name: sub-grid boarding barrier
+  description: Blocks boarding onto a sub-grid except at stairs. Passes people already aboard.
+  categories: [ HideSpawnMenu ]
+  components:
+  - type: Transform
+    anchored: false
+  - type: Physics
+    bodyType: Kinematic
+    canCollide: true
+  - type: Fixtures
+    fixtures: {}
+  - type: SubGridPerimeter

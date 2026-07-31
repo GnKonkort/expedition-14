@@ -58,11 +58,10 @@ public sealed partial class StationJobsSystem
     /// </remarks>
     public Dictionary<NetUserId, (ProtoId<JobPrototype>?, EntityUid)> AssignJobs(Dictionary<NetUserId, HumanoidCharacterProfile> profiles, IReadOnlyList<EntityUid> stations, bool useRoundStartJobs = true)
     {
-        DebugTools.Assert(stations.Count > 0);
-
         InitializeRoundStart();
 
-        if (profiles.Count == 0)
+        // No station (e.g. incomplete debug map) — nothing to assign; avoid hard crash on round start.
+        if (stations.Count == 0 || profiles.Count == 0)
             return new();
 
         // We need to modify this collection later, so make a copy of it.
