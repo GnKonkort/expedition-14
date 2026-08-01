@@ -8,8 +8,8 @@ using Robust.Shared.Map.Components;
 using Robust.Shared.Physics;
 using Robust.Shared.Physics.Collision.Shapes;
 using Robust.Shared.Physics.Components;
-using Robust.Shared.Physics.Events;
 using Robust.Shared.Physics.Systems;
+using Robust.Shared.Timing;
 
 namespace Content.Server._CitadelStation.SubGrid.Systems;
 
@@ -25,9 +25,7 @@ public sealed class SubGridSystem : EntitySystem
     [Dependency] private readonly SharedTransformSystem _transform = default!;
     [Dependency] private readonly SubGridGravitySystem _gravity = default!;
     [Dependency] private readonly SubGridAtmosSystem _atmos = default!;
-    [Dependency] private readonly SubGridDebugLog _dbg = default!;
-
-    private static readonly TimeSpan CollideLogInterval = TimeSpan.FromMilliseconds(200);
+    [Dependency] private readonly IGameTiming _timing = default!;
 
     /// <summary>Half-extents of the per-tile boarding barrier (just under a full tile).</summary>
     private static readonly Vector2 BarrierHalf = new(0.48f, 0.48f);
@@ -42,6 +40,11 @@ public sealed class SubGridSystem : EntitySystem
     private static readonly int BarrierMask = (int) (CollisionGroup.MobMask | CollisionGroup.SmallMobMask
         | CollisionGroup.MobLayer);
 
+    /// <summary>How often to re-assert boarding barriers still live on their SubGrid.</summary>
+    private static readonly TimeSpan PerimeterReconcileInterval = TimeSpan.FromSeconds(0.5);
+
+    private TimeSpan _nextPerimeterReconcile;
+
     public override void Initialize()
     {
         base.Initialize();
@@ -52,27 +55,21 @@ public sealed class SubGridSystem : EntitySystem
         SubscribeLocalEvent<SubGridComponent, GridFixtureChangeEvent>(OnFixturesChanged);
         SubscribeLocalEvent<SubGridComponent, FloorTileAttemptEvent>(OnFloorTileAttempt);
         SubscribeLocalEvent<SubGridComponent, TileChangedEvent>(OnTileChanged);
-        SubscribeLocalEvent<SubGridPerimeterComponent, StartCollideEvent>(OnPerimeterStartCollide);
-        SubscribeLocalEvent<SubGridPerimeterComponent, EndCollideEvent>(OnPerimeterEndCollide);
         SubscribeLocalEvent<SubGridAccessComponent, ComponentStartup>(OnAccessStartup);
         SubscribeLocalEvent<SubGridAccessComponent, ComponentShutdown>(OnAccessShutdown);
-        Log.Info("SubGridSystem initialized (collision debug -> {Path})", _dbg.Path);
+        Log.Info("SubGridSystem initialized");
     }
 
-    private void OnPerimeterStartCollide(EntityUid uid, SubGridPerimeterComponent comp, ref StartCollideEvent args)
+    public override void Update(float frameTime)
     {
-        var xOther = Transform(args.OtherEntity);
-        _dbg.Write("barrier.collide+",
-            $"barrier={ToPrettyString(uid)} tile={comp.Tile} owner={comp.OwnerGrid} other={ToPrettyString(args.OtherEntity)} otherGrid={xOther.GridUid} otherParent={xOther.ParentUid} ourFix={args.OurFixtureId} otherFix={args.OtherFixtureId}");
-    }
+        base.Update(frameTime);
 
-    private void OnPerimeterEndCollide(EntityUid uid, SubGridPerimeterComponent comp, ref EndCollideEvent args)
-    {
-        _dbg.WriteThrottle(
-            $"barrier.collide-:{uid}:{args.OtherEntity}",
-            CollideLogInterval,
-            "barrier.collide-",
-            $"barrier={ToPrettyString(uid)} tile={comp.Tile} other={ToPrettyString(args.OtherEntity)}");
+        if (_timing.CurTime < _nextPerimeterReconcile)
+            return;
+
+        _nextPerimeterReconcile = _timing.CurTime + PerimeterReconcileInterval;
+        ReconcileAllPerimeters();
+        ReconcileAccessPoints();
     }
 
     private void OnStartup(Entity<SubGridComponent> ent, ref ComponentStartup args)
@@ -101,8 +98,6 @@ public sealed class SubGridSystem : EntitySystem
         }
 
         ClearAllPerimeters(ent);
-        ent.Comp.BarrierPassThrough.Clear();
-        Dirty(ent);
     }
 
     private void OnFixturesChanged(Entity<SubGridComponent> ent, ref GridFixtureChangeEvent args)
@@ -142,24 +137,164 @@ public sealed class SubGridSystem : EntitySystem
 
     private void OnAccessStartup(EntityUid uid, SubGridAccessComponent comp, ref ComponentStartup args)
     {
+        BindAccessOwnership(uid, comp);
         RefreshAccessTile(uid);
     }
 
     private void OnAccessShutdown(EntityUid uid, SubGridAccessComponent comp, ref ComponentShutdown args)
     {
+        if (comp.OwnerGrid != default && Exists(comp.OwnerGrid))
+            UnregisterBoardingTile(comp.OwnerGrid, comp.Tile, except: uid);
+
         RefreshAccessTile(uid);
+    }
+
+    private void BindAccessOwnership(EntityUid uid, SubGridAccessComponent comp)
+    {
+        if (comp.OwnerGrid == default || !Exists(comp.OwnerGrid) || !HasComp<SubGridComponent>(comp.OwnerGrid))
+        {
+            var xform = Transform(uid);
+            if (xform.GridUid is not { } gridUid || !HasComp<SubGridComponent>(gridUid))
+                return;
+            if (!TryComp(gridUid, out MapGridComponent? grid))
+                return;
+
+            comp.OwnerGrid = gridUid;
+            comp.Tile = _map.WorldToTile(gridUid, grid, _transform.GetWorldPosition(xform));
+            Dirty(uid, comp);
+        }
+
+        RegisterBoardingTile(comp.OwnerGrid, comp.Tile);
+    }
+
+    /// <summary>Record a boarding tile on the SubGrid (source of truth for barriers / soft-pass).</summary>
+    public void RegisterBoardingTile(EntityUid gridUid, Vector2i tile)
+    {
+        if (!TryComp(gridUid, out SubGridComponent? sub))
+            return;
+
+        if (!sub.BoardingTiles.Add(tile))
+            return;
+
+        Dirty(gridUid, sub);
+        if (TryComp(gridUid, out MapGridComponent? grid))
+            EnsurePerimeterAt(gridUid, grid, tile);
+    }
+
+    /// <summary>Drop a boarding tile if no other access entity still claims it.</summary>
+    public void UnregisterBoardingTile(EntityUid gridUid, Vector2i tile, EntityUid? except = null)
+    {
+        if (!TryComp(gridUid, out SubGridComponent? sub) || !sub.BoardingTiles.Contains(tile))
+            return;
+
+        var query = EntityQueryEnumerator<SubGridAccessComponent>();
+        while (query.MoveNext(out var accessUid, out var access))
+        {
+            if (except != null && accessUid == except.Value)
+                continue;
+            if (access.OwnerGrid == gridUid && access.Tile == tile)
+                return;
+        }
+
+        if (!sub.BoardingTiles.Remove(tile))
+            return;
+
+        Dirty(gridUid, sub);
+        if (TryComp(gridUid, out MapGridComponent? grid))
+            EnsurePerimeterAt(gridUid, grid, tile);
+    }
+
+    /// <summary>
+    /// Stairs/docks owned by a SubGrid can reparent onto the host while it moves.
+    /// Seat them back onto OwnerGrid at their recorded tile (do not delete).
+    /// </summary>
+    public void ReconcileAccessPoints(EntityUid? onlyGrid = null)
+    {
+        var query = EntityQueryEnumerator<SubGridAccessComponent, TransformComponent>();
+        while (query.MoveNext(out var uid, out var access, out var xform))
+        {
+            var owner = access.OwnerGrid;
+            if (owner == default || !Exists(owner) || !HasComp<SubGridComponent>(owner))
+                continue;
+
+            if (onlyGrid != null && owner != onlyGrid.Value)
+                continue;
+
+            // Keep BoardingTiles in sync (covers pads fabricated before the registry existed).
+            RegisterBoardingTile(owner, access.Tile);
+
+            if (IsOnOwnerGrid(xform, owner))
+            {
+                if (TryComp(owner, out MapGridComponent? gluedGrid) &&
+                    IsAccessOffTileCenter(xform, owner, gluedGrid, access.Tile))
+                {
+                    SeatAccessOnOwner(uid, access, owner, gluedGrid, xform);
+                }
+
+                continue;
+            }
+
+            if (!TryComp(owner, out MapGridComponent? grid))
+                continue;
+
+            SeatAccessOnOwner(uid, access, owner, grid, xform);
+        }
+    }
+
+    private void SeatAccessOnOwner(
+        EntityUid uid,
+        SubGridAccessComponent access,
+        EntityUid owner,
+        MapGridComponent grid,
+        TransformComponent xform)
+    {
+        var local = new Vector2((access.Tile.X + 0.5f) * grid.TileSize, (access.Tile.Y + 0.5f) * grid.TileSize);
+        var rot = xform.LocalRotation;
+        _transform.Unanchor(uid);
+        _transform.SetCoordinates(uid, new EntityCoordinates(owner, local));
+        _transform.SetLocalRotation(uid, rot);
+        _transform.AnchorEntity(uid);
+
+        RefreshAccessTile(uid);
+    }
+
+    private static bool IsAccessOffTileCenter(
+        TransformComponent xform,
+        EntityUid owner,
+        MapGridComponent grid,
+        Vector2i tile)
+    {
+        if (xform.ParentUid != owner)
+            return true;
+
+        var expected = new Vector2((tile.X + 0.5f) * grid.TileSize, (tile.Y + 0.5f) * grid.TileSize);
+        return (xform.LocalPosition - expected).LengthSquared() > 0.01f;
     }
 
     private void RefreshAccessTile(EntityUid accessEnt)
     {
+        TryComp(accessEnt, out SubGridAccessComponent? accessComp);
         var xform = Transform(accessEnt);
-        if (xform.GridUid is not { } gridUid || !HasComp<SubGridComponent>(gridUid))
-            return;
-        if (!TryComp(gridUid, out MapGridComponent? grid))
+
+        EntityUid? gridUid = null;
+        if (accessComp != null &&
+            accessComp.OwnerGrid != default &&
+            HasComp<SubGridComponent>(accessComp.OwnerGrid))
+        {
+            gridUid = accessComp.OwnerGrid;
+        }
+        else if (xform.GridUid is { } g && HasComp<SubGridComponent>(g))
+        {
+            gridUid = g;
+        }
+
+        if (gridUid == null || !TryComp(gridUid.Value, out MapGridComponent? grid))
             return;
 
-        var tile = _map.WorldToTile(gridUid, grid, _transform.GetWorldPosition(xform));
-        EnsurePerimeterAt(gridUid, grid, tile);
+        var tile = accessComp != null && accessComp.OwnerGrid == gridUid
+            ? accessComp.Tile
+            : _map.WorldToTile(gridUid.Value, grid, _transform.GetWorldPosition(xform));
+        EnsurePerimeterAt(gridUid.Value, grid, tile);
     }
 
     private void OnFloorTileAttempt(Entity<SubGridComponent> ent, ref FloorTileAttemptEvent args)
@@ -298,11 +433,14 @@ public sealed class SubGridSystem : EntitySystem
 
     /// <summary>
     /// Full resync: one boarding barrier per floor tile (disabled on stairs/dock).
+    /// Also purges barriers that drifted onto a foreign grid (e.g. host under the pad).
     /// </summary>
     public void SyncAllPerimeters(EntityUid gridUid)
     {
         if (!TryComp(gridUid, out MapGridComponent? grid))
             return;
+
+        PurgeDetachedPerimeters(gridUid);
 
         var floors = new HashSet<Vector2i>();
         var tileEnum = _map.GetAllTilesEnumerator(gridUid, grid);
@@ -313,12 +451,12 @@ public sealed class SubGridSystem : EntitySystem
             floors.Add(tileRef.GridIndices);
         }
 
-        // Remove barriers whose tile no longer exists.
+        // Remove barriers owned by this SubGrid whose tile no longer exists.
         var existing = new List<(EntityUid Uid, Vector2i Tile)>();
-        var query = EntityQueryEnumerator<SubGridPerimeterComponent, TransformComponent>();
-        while (query.MoveNext(out var uid, out var peri, out var xform))
+        var query = EntityQueryEnumerator<SubGridPerimeterComponent>();
+        while (query.MoveNext(out var uid, out var peri))
         {
-            if (xform.GridUid != gridUid && xform.ParentUid != gridUid)
+            if (peri.OwnerGrid != gridUid)
                 continue;
             existing.Add((uid, peri.Tile));
         }
@@ -335,13 +473,75 @@ public sealed class SubGridSystem : EntitySystem
         Log.Debug("SubGrid perimeter sync: {Grid} floors={Floors}", ToPrettyString(gridUid), floors.Count);
     }
 
+    /// <summary>
+    /// Drop invisible boarding barriers that left their SubGrid (reparented onto the host / map),
+    /// then recreate floors on affected SubGrids.
+    /// </summary>
+    private void ReconcileAllPerimeters()
+    {
+        var dirtyOwners = new HashSet<EntityUid>();
+        var purged = PurgeDetachedPerimeters(ownerFilter: null, dirtyOwners);
+
+        if (purged <= 0)
+            return;
+
+        Log.Debug("SubGrid purged {Count} detached boarding barriers (owners={Owners})",
+            purged, dirtyOwners.Count);
+
+        foreach (var gridUid in dirtyOwners)
+        {
+            if (Exists(gridUid) && HasComp<SubGridComponent>(gridUid))
+                SyncAllPerimeters(gridUid);
+        }
+    }
+
+    /// <summary>
+    /// Delete perimeter entities that are not parented to their OwnerGrid (or whose owner is gone).
+    /// </summary>
+    /// <returns>Number of deleted barriers.</returns>
+    private int PurgeDetachedPerimeters(EntityUid? ownerFilter = null, HashSet<EntityUid>? dirtyOwners = null)
+    {
+        var toDelete = new List<EntityUid>();
+        var query = EntityQueryEnumerator<SubGridPerimeterComponent, TransformComponent>();
+        while (query.MoveNext(out var uid, out var peri, out var xform))
+        {
+            if (ownerFilter != null && peri.OwnerGrid != ownerFilter.Value)
+                continue;
+
+            var owner = peri.OwnerGrid;
+            if (owner == default || !Exists(owner) || !HasComp<SubGridComponent>(owner))
+            {
+                toDelete.Add(uid);
+                continue;
+            }
+
+            if (IsOnOwnerGrid(xform, owner))
+                continue;
+
+            // Drifted onto host / map / another grid — remove; Sync recreates on the SubGrid.
+            toDelete.Add(uid);
+            dirtyOwners?.Add(owner);
+        }
+
+        foreach (var uid in toDelete)
+            QueueDel(uid);
+
+        return toDelete.Count;
+    }
+
+    private static bool IsOnOwnerGrid(TransformComponent xform, EntityUid ownerGrid)
+    {
+        return xform.GridUid == ownerGrid || xform.ParentUid == ownerGrid;
+    }
+
     private void ClearAllPerimeters(EntityUid gridUid)
     {
         var toDelete = new List<EntityUid>();
         var query = EntityQueryEnumerator<SubGridPerimeterComponent, TransformComponent>();
-        while (query.MoveNext(out var uid, out _, out var xform))
+        while (query.MoveNext(out var uid, out var peri, out var xform))
         {
-            if (xform.GridUid == gridUid || xform.ParentUid == gridUid)
+            // Include barriers that already drifted off the SubGrid but still claim it.
+            if (peri.OwnerGrid == gridUid || xform.GridUid == gridUid || xform.ParentUid == gridUid)
                 toDelete.Add(uid);
         }
 
@@ -353,11 +553,11 @@ public sealed class SubGridSystem : EntitySystem
     {
         var toDelete = new List<EntityUid>();
         var query = EntityQueryEnumerator<SubGridPerimeterComponent, TransformComponent>();
-        while (query.MoveNext(out var uid, out var peri, out var xform))
+        while (query.MoveNext(out var uid, out var peri, out _))
         {
             if (peri.Tile != tile)
                 continue;
-            if (xform.GridUid != gridUid && xform.ParentUid != gridUid)
+            if (peri.OwnerGrid != gridUid)
                 continue;
             toDelete.Add(uid);
         }
@@ -377,8 +577,17 @@ public sealed class SubGridSystem : EntitySystem
         {
             if (peri.Tile != tile)
                 continue;
-            if (peri.OwnerGrid != gridUid && xform.GridUid != gridUid && xform.ParentUid != gridUid)
+            // Prefer OwnerGrid; ignore strays that claim another owner.
+            if (peri.OwnerGrid != gridUid)
                 continue;
+
+            // If it drifted off the SubGrid, destroy and respawn cleanly.
+            if (!IsOnOwnerGrid(xform, gridUid))
+            {
+                QueueDel(uid);
+                continue;
+            }
+
             existing = uid;
             break;
         }
@@ -392,6 +601,9 @@ public sealed class SubGridSystem : EntitySystem
             var ent = Spawn(SubGridComponent.PerimeterPrototypeId, new EntityCoordinates(gridUid, local));
             _transform.Unanchor(ent);
             _transform.SetCoordinates(ent, new EntityCoordinates(gridUid, local));
+            // Barriers must never grid-traverse onto the host under the pad.
+            var barrierXform = Transform(ent);
+            barrierXform.GridTraversal = false;
 
             var peri = EnsureComp<SubGridPerimeterComponent>(ent);
             peri.Tile = tile;
@@ -436,6 +648,9 @@ public sealed class SubGridSystem : EntitySystem
         var barrier = existing.Value;
         _transform.Unanchor(barrier);
         _transform.SetCoordinates(barrier, new EntityCoordinates(gridUid, local));
+        var existingXform = Transform(barrier);
+        if (existingXform.GridTraversal)
+            existingXform.GridTraversal = false;
 
         if (TryComp(barrier, out SubGridPerimeterComponent? existingPeri))
         {
@@ -461,16 +676,22 @@ public sealed class SubGridSystem : EntitySystem
 
     private bool TileHasAccess(EntityUid gridUid, MapGridComponent grid, Vector2i indices)
     {
+        if (TryComp(gridUid, out SubGridComponent? sub) && sub.BoardingTiles.Contains(indices))
+            return true;
+
         foreach (var uid in _map.GetAnchoredEntities(gridUid, grid, indices))
         {
             if (HasComp<SubGridAccessComponent>(uid))
                 return true;
         }
 
-        // Unanchored stairs / dock markers still parented to this SubGrid.
+        // Unanchored stairs / ownership-tracked access still on this SubGrid tile.
         var query = EntityQueryEnumerator<SubGridAccessComponent, TransformComponent>();
-        while (query.MoveNext(out _, out _, out var xform))
+        while (query.MoveNext(out _, out var access, out var xform))
         {
+            if (access.OwnerGrid == gridUid && access.Tile == indices)
+                return true;
+
             if (xform.GridUid != gridUid && xform.ParentUid != gridUid)
                 continue;
             if (_map.WorldToTile(gridUid, grid, _transform.GetWorldPosition(xform)) == indices)

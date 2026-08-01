@@ -3,7 +3,7 @@ using Robust.Shared.Prototypes;
 namespace Content.Shared._CitadelStation.SubGrid.Components;
 
 /// <summary>
-/// Station machine that spends sheet stacks in item slots to spawn a starter 3x3 sub-grid pad with antigrav.
+/// Station machine that opens a fabricator UI to design and extrude a SubGrid vehicle pad.
 /// </summary>
 [RegisterComponent]
 public sealed partial class SubGridPadComponent : Component
@@ -28,18 +28,18 @@ public sealed partial class SubGridPadComponent : Component
     [DataField]
     public string UraniumStackType = "Uranium";
 
-    /// <summary>How many tiles in front of the pad to place the grid center.</summary>
+    /// <summary>How many tiles in front of the pad to place the blueprint AABB center.</summary>
     [DataField]
     public float SpawnOffsetTiles = 2.5f;
-
-    [DataField]
-    public int GridSize = 3;
 
     [DataField]
     public EntProtoId AntigravPrototype = "SubGridAntigrav";
 
     [DataField]
     public EntProtoId ConsolePrototype = "SubGridConsole";
+
+    [DataField]
+    public EntProtoId StairsPrototype = "SubGridStairs";
 
     [DataField]
     public EntProtoId ThrusterPrototype = "SubGridThruster";

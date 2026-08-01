@@ -1,12 +1,16 @@
+using System.Linq;
 using System.Numerics;
+using Content.Server.Atmos.Components;
 using Content.Server.Shuttles.Components;
-using Content.Server.Shuttles.Systems;
 using Content.Shared.Containers.ItemSlots;
-using Content.Shared.Interaction;
+using Content.Shared.Gravity;
 using Content.Shared.Maps;
 using Content.Shared.Popups;
 using Content.Shared.Stacks;
+using Content.Shared.UserInterface;
+using Content.Shared._CitadelStation.SubGrid;
 using Content.Shared._CitadelStation.SubGrid.Components;
+using Robust.Server.GameObjects;
 using Robust.Shared.Map;
 using Robust.Shared.Map.Components;
 using Robust.Shared.Maths;
@@ -18,7 +22,7 @@ using Robust.Shared.Prototypes;
 namespace Content.Server._CitadelStation.SubGrid.Systems;
 
 /// <summary>
-/// Spawns a 3x3 sub-grid with a center antigrav when activated from the front with enough sheet stacks in slots.
+/// SubGrid fabricator: opens a 7×15 design UI and assembles a custom-shaped pad.
 /// </summary>
 public sealed class SubGridPadSystem : EntitySystem
 {
@@ -29,62 +33,130 @@ public sealed class SubGridPadSystem : EntitySystem
     [Dependency] private readonly SharedTransformSystem _transform = default!;
     [Dependency] private readonly ITileDefinitionManager _tileDefs = default!;
     [Dependency] private readonly IMapManager _mapManager = default!;
-    [Dependency] private readonly ShuttleSystem _shuttle = default!;
     [Dependency] private readonly SubGridSystem _subGrids = default!;
     [Dependency] private readonly SharedPhysicsSystem _physics = default!;
+    [Dependency] private readonly UserInterfaceSystem _ui = default!;
 
     public override void Initialize()
     {
         base.Initialize();
-        SubscribeLocalEvent<SubGridPadComponent, ActivateInWorldEvent>(OnActivate);
-        Log.Info("SubGridPadSystem initialized");
+        SubscribeLocalEvent<SubGridPadComponent, AfterActivatableUIOpenEvent>(OnUiOpened);
+        SubscribeLocalEvent<SubGridPadComponent, SubGridFabricatorAssembleMessage>(OnAssemble);
+        SubscribeLocalEvent<SubGridPadComponent, SubGridFabricatorClearMessage>(OnClear);
+        Log.Info("SubGridPadSystem initialized (fabricator UI)");
     }
 
-    private void OnActivate(Entity<SubGridPadComponent> ent, ref ActivateInWorldEvent args)
+    private void OnUiOpened(Entity<SubGridPadComponent> ent, ref AfterActivatableUIOpenEvent args)
     {
-        Log.Debug("Pad activate: pad={Pad} user={User} handled={Handled} complex={Complex}",
-            ToPrettyString(ent), ToPrettyString(args.User), args.Handled, args.Complex);
+        UpdateUiState(ent, args.Actor);
+    }
 
-        if (args.Handled || !args.Complex)
+    private void OnClear(Entity<SubGridPadComponent> ent, ref SubGridFabricatorClearMessage args)
+    {
+        UpdateUiState(ent, args.Actor);
+    }
+
+    private void OnAssemble(Entity<SubGridPadComponent> ent, ref SubGridFabricatorAssembleMessage args)
+    {
+        var user = args.Actor;
+        var cells = args.Cells;
+
+        if (cells.Length != SubGridFabricatorConstants.CellCount)
         {
-            Log.Debug("Pad activate ignored (handled or not complex): pad={Pad}", ToPrettyString(ent));
+            _popup.PopupEntity(Loc.GetString("subgrid-fab-err-empty"), ent, user);
             return;
         }
 
-        args.Handled = true;
-
-        if (!IsFrontActivation(ent, args.User))
+        if (!IsFrontActivation(ent, user))
         {
-            Log.Warning("Pad activate rejected: not front face. pad={Pad} user={User}",
-                ToPrettyString(ent), ToPrettyString(args.User));
-            _popup.PopupEntity(Loc.GetString("subgrid-pad-need-front"), ent, args.User);
+            _popup.PopupEntity(Loc.GetString("subgrid-pad-need-front"), ent, user);
             return;
         }
 
-        // Slots share a Sheet whitelist, so insert order may swap steel/uranium —
-        // resolve by stack type across both slots, not by slot id.
+        if (!TryValidateBlueprint(cells, out var error, out var occupied))
+        {
+            _popup.PopupEntity(error, ent, user);
+            UpdateUiState(ent, user);
+            return;
+        }
+
         if (!TryFindRequiredSheets(ent, out var steel, out var uranium))
         {
-            Log.Warning("Pad activate rejected: materials. pad={Pad}", ToPrettyString(ent));
-            _popup.PopupEntity(Loc.GetString("subgrid-pad-need-materials"), ent, args.User);
+            _popup.PopupEntity(Loc.GetString("subgrid-pad-need-materials"), ent, user);
+            UpdateUiState(ent, user);
             return;
         }
 
-        if (!TrySpawnSubGrid(ent, out var gridUid))
+        if (!TrySpawnFromBlueprint(ent, cells, occupied, out var gridUid))
         {
-            Log.Error("Pad spawn failed. pad={Pad}", ToPrettyString(ent));
-            _popup.PopupEntity(Loc.GetString("subgrid-pad-blocked"), ent, args.User);
+            _popup.PopupEntity(Loc.GetString("subgrid-pad-blocked"), ent, user);
             return;
         }
-
-        Log.Info("Pad spawn ok: pad={Pad} grid={Grid} consuming sheets steel={Steel} uranium={Uranium}",
-            ToPrettyString(ent), ToPrettyString(gridUid),
-            ent.Comp.SteelSheetsRequired, ent.Comp.UraniumSheetsRequired);
 
         _stacks.Use(steel.Owner, ent.Comp.SteelSheetsRequired, steel.Comp);
         _stacks.Use(uranium.Owner, ent.Comp.UraniumSheetsRequired, uranium.Comp);
 
-        _popup.PopupEntity(Loc.GetString("subgrid-pad-spawned"), ent, args.User);
+        _popup.PopupEntity(Loc.GetString("subgrid-pad-spawned"), ent, user);
+        _ui.CloseUi(ent.Owner, SubGridFabricatorUiKey.Key, user);
+        UpdateUiState(ent, user);
+        Log.Info("Fabricator assembled SubGrid {Grid} from {Pad} tiles={Tiles}",
+            ToPrettyString(gridUid), ToPrettyString(ent), occupied.Count);
+    }
+
+    private void UpdateUiState(Entity<SubGridPadComponent> ent, EntityUid? actor = null)
+    {
+        CountMaterials(ent, out var steelHave, out var uraniumHave);
+        var state = new SubGridFabricatorBoundUserInterfaceState(
+            new SubGridFabricatorCell[SubGridFabricatorConstants.CellCount],
+            steelHave,
+            uraniumHave,
+            ent.Comp.SteelSheetsRequired,
+            ent.Comp.UraniumSheetsRequired);
+
+        if (actor != null)
+            _ui.SetUiState(ent.Owner, SubGridFabricatorUiKey.Key, state);
+        else
+            _ui.SetUiState(ent.Owner, SubGridFabricatorUiKey.Key, state);
+    }
+
+    private void CountMaterials(Entity<SubGridPadComponent> ent, out int steel, out int uranium)
+    {
+        steel = 0;
+        uranium = 0;
+        Entity<StackComponent>? foundSteel = null;
+        Entity<StackComponent>? foundUranium = null;
+        ReadSlot(ent, ent.Comp.SteelSlotId, ref foundSteel, ref foundUranium);
+        ReadSlot(ent, ent.Comp.UraniumSlotId, ref foundSteel, ref foundUranium);
+        steel = foundSteel?.Comp.Count ?? 0;
+        uranium = foundUranium?.Comp.Count ?? 0;
+    }
+
+    private bool TryValidateBlueprint(
+        SubGridFabricatorCell[] cells,
+        out string error,
+        out List<(int X, int Y, SubGridFabricatorCell Cell)> occupied)
+    {
+        error = string.Empty;
+        occupied = new();
+
+        if (!SubGridFabricatorConstants.TryValidate(cells, out var errId))
+        {
+            error = Loc.GetString(errId);
+            return false;
+        }
+
+        for (var x = 0; x < SubGridFabricatorConstants.Width; x++)
+        {
+            for (var y = 0; y < SubGridFabricatorConstants.Height; y++)
+            {
+                var cell = cells[SubGridFabricatorConstants.Index(x, y)];
+                if (!SubGridFabricatorConstants.IsOccupied(cell))
+                    continue;
+                occupied.Add((x, y, cell));
+            }
+        }
+
+        return true;
     }
 
     private bool TryFindRequiredSheets(
@@ -101,20 +173,11 @@ public sealed class SubGridPadSystem : EntitySystem
         ReadSlot(ent, ent.Comp.SteelSlotId, ref foundSteel, ref foundUranium);
         ReadSlot(ent, ent.Comp.UraniumSlotId, ref foundSteel, ref foundUranium);
 
-        var steelOk = foundSteel != null && foundSteel.Value.Comp.Count >= ent.Comp.SteelSheetsRequired;
-        var uraniumOk = foundUranium != null && foundUranium.Value.Comp.Count >= ent.Comp.UraniumSheetsRequired;
-
-        Log.Debug(
-            "Pad materials: pad={Pad} steel={SteelCount}/{SteelNeed} uranium={UraniumCount}/{UraniumNeed} steelOk={SteelOk} uraniumOk={UraniumOk}",
-            ToPrettyString(ent),
-            foundSteel?.Comp.Count ?? 0,
-            ent.Comp.SteelSheetsRequired,
-            foundUranium?.Comp.Count ?? 0,
-            ent.Comp.UraniumSheetsRequired,
-            steelOk,
-            uraniumOk);
-
-        if (!steelOk || !uraniumOk || foundSteel == null || foundUranium == null)
+        if (foundSteel == null || foundUranium == null)
+            return false;
+        if (foundSteel.Value.Comp.Count < ent.Comp.SteelSheetsRequired)
+            return false;
+        if (foundUranium.Value.Comp.Count < ent.Comp.UraniumSheetsRequired)
             return false;
 
         steel = foundSteel.Value;
@@ -129,31 +192,13 @@ public sealed class SubGridPadSystem : EntitySystem
         ref Entity<StackComponent>? foundUranium)
     {
         var item = _slots.GetItemOrNull(ent, slotId);
-        if (item == null)
-        {
-            Log.Debug("Pad slot empty: pad={Pad} slot={Slot}", ToPrettyString(ent), slotId);
+        if (item == null || !TryComp<StackComponent>(item.Value, out var stack))
             return;
-        }
-
-        if (!TryComp<StackComponent>(item.Value, out var stack))
-        {
-            Log.Warning("Pad slot item has no Stack: pad={Pad} slot={Slot} item={Item}",
-                ToPrettyString(ent), slotId, ToPrettyString(item.Value));
-            return;
-        }
-
-        Log.Debug("Pad slot contents: pad={Pad} slot={Slot} item={Item} type={Type} count={Count}",
-            ToPrettyString(ent), slotId, ToPrettyString(item.Value), stack.StackTypeId, stack.Count);
 
         if (stack.StackTypeId == ent.Comp.SteelStackType)
             foundSteel = (item.Value, stack);
         else if (stack.StackTypeId == ent.Comp.UraniumStackType)
             foundUranium = (item.Value, stack);
-        else
-        {
-            Log.Debug("Pad slot ignored (wrong material): pad={Pad} slot={Slot} type={Type}",
-                ToPrettyString(ent), slotId, stack.StackTypeId);
-        }
     }
 
     private bool IsFrontActivation(Entity<SubGridPadComponent> ent, EntityUid user)
@@ -169,22 +214,20 @@ public sealed class SubGridPadSystem : EntitySystem
         if (facing == Vector2.Zero)
             return true;
 
-        var dot = Vector2.Dot(facing.Normalized(), delta.Normalized());
-        Log.Debug("Pad front check: pad={Pad} user={User} dot={Dot:F2} min={Min:F2}",
-            ToPrettyString(ent), ToPrettyString(user), dot, ent.Comp.FrontDotMin);
-        return dot >= ent.Comp.FrontDotMin;
+        return Vector2.Dot(facing.Normalized(), delta.Normalized()) >= ent.Comp.FrontDotMin;
     }
 
-    private bool TrySpawnSubGrid(Entity<SubGridPadComponent> ent, out EntityUid gridUid)
+    private bool TrySpawnFromBlueprint(
+        Entity<SubGridPadComponent> ent,
+        SubGridFabricatorCell[] cells,
+        List<(int X, int Y, SubGridFabricatorCell Cell)> occupied,
+        out EntityUid gridUid)
     {
         gridUid = default;
 
         var padXform = Transform(ent);
         if (padXform.MapUid == null)
-        {
-            Log.Error("Pad spawn: pad not on a map. pad={Pad}", ToPrettyString(ent));
             return false;
-        }
 
         var mapId = padXform.MapID;
         var facing = _transform.GetWorldRotation(padXform);
@@ -194,29 +237,23 @@ public sealed class SubGridPadSystem : EntitySystem
         else
             facingVec = facingVec.Normalized();
 
+        var minX = occupied.Min(c => c.X);
+        var maxX = occupied.Max(c => c.X);
+        var minY = occupied.Min(c => c.Y);
+        var maxY = occupied.Max(c => c.Y);
+        var sizeX = maxX - minX + 1;
+        var sizeY = maxY - minY + 1;
+
         var padWorld = _transform.GetWorldPosition(padXform);
-        var size = ent.Comp.GridSize;
-        var half = size / 2f;
-        var centerWorld = padWorld + facingVec * ent.Comp.SpawnOffsetTiles;
+        var centerWorld = padWorld + facingVec * MathF.Max(ent.Comp.SpawnOffsetTiles, MathF.Max(sizeX, sizeY) * 0.5f + 1.5f);
 
-        Log.Debug("Pad spawn layout: pad={Pad} map={Map} padWorld={PadWorld} center={Center} facing={Facing} size={Size}",
-            ToPrettyString(ent), mapId, padWorld, centerWorld, facing, size);
-
-        var checkBox = Box2.CenteredAround(centerWorld, new Vector2(size + 0.25f, size + 0.25f));
+        var checkBox = Box2.CenteredAround(centerWorld, new Vector2(sizeX + 0.5f, sizeY + 0.5f));
         var grids = new List<Entity<MapGridComponent>>();
         _mapManager.FindGridsIntersecting(mapId, checkBox, ref grids);
-        Log.Debug("Pad spawn overlap check: pad={Pad} intersectingGrids={Count} box={Box}",
-            ToPrettyString(ent), grids.Count, checkBox);
         foreach (var g in grids)
         {
-            Log.Debug("Pad spawn overlap candidate: {Grid} isSub={Sub}",
-                ToPrettyString(g.Owner), HasComp<SubGridComponent>(g.Owner));
             if (HasComp<SubGridComponent>(g.Owner))
-            {
-                Log.Warning("Pad spawn blocked by existing sub-grid: {Grid} aabb={Aabb}",
-                    ToPrettyString(g.Owner), checkBox);
                 return false;
-            }
         }
 
         ContentTileDefinition tileDef;
@@ -226,62 +263,50 @@ public sealed class SubGridPadSystem : EntitySystem
         }
         catch (Exception e)
         {
-            Log.Error("Pad spawn: bad floor tile id '{Tile}': {Error}", ent.Comp.FloorTileId, e.Message);
+            Log.Error("Fabricator bad floor tile '{Tile}': {Error}", ent.Comp.FloorTileId, e.Message);
             return false;
         }
 
         var grid = _mapManager.CreateGridEntity(mapId);
         gridUid = grid.Owner;
-        Log.Debug("Pad spawned grid entity {Grid}", ToPrettyString(gridUid));
 
-        var originWorld = centerWorld - facing.RotateVec(new Vector2(half, half));
+        // Remap blueprint AABB so local (0,0) is SW; place AABB center at centerWorld.
+        var originWorld = centerWorld - facing.RotateVec(new Vector2(sizeX / 2f, sizeY / 2f));
         _transform.SetWorldPosition(gridUid, originWorld);
         _transform.SetWorldRotation(gridUid, facing);
 
-        var tiles = new List<(Vector2i Index, Tile Tile)>(size * size);
-        for (var x = 0; x < size; x++)
+        var tiles = new List<(Vector2i Index, Tile Tile)>(occupied.Count);
+        foreach (var (x, y, _) in occupied)
         {
-            for (var y = 0; y < size; y++)
-            {
-                tiles.Add((new Vector2i(x, y), new Tile(tileDef.TileId)));
-            }
+            var lx = x - minX;
+            var ly = y - minY;
+            tiles.Add((new Vector2i(lx, ly), new Tile(tileDef.TileId)));
         }
 
         _map.SetTiles(gridUid, grid.Comp, tiles);
-        Log.Debug("Pad set {Count} tiles on {Grid} origin={Origin}", tiles.Count, ToPrettyString(gridUid), originWorld);
 
         var sub = EnsureComp<SubGridComponent>(gridUid);
+        sub.MaxTiles = 128;
         Dirty(gridUid, sub);
-        EnsureComp<Content.Server.Atmos.Components.GridAtmosphereComponent>(gridUid);
-        var gravity = EnsureComp<Content.Shared.Gravity.GravityComponent>(gridUid);
+        EnsureComp<GridAtmosphereComponent>(gridUid);
+        var gravity = EnsureComp<GravityComponent>(gridUid);
         gravity.Inherent = true;
         Dirty(gridUid, gravity);
-        Log.Debug("Pad ensured atmos+gravity comps on {Grid}", ToPrettyString(gridUid));
 
-        if (TryComp<ShuttleComponent>(gridUid, out var shuttle))
+        if (TryComp<ShuttleComponent>(gridUid, out var shuttle) && TryComp(gridUid, out PhysicsComponent? body))
         {
-            // Parked: Kinematic — wall contacts work, players don't shove the hull.
             shuttle.Enabled = false;
-            if (TryComp(gridUid, out PhysicsComponent? body))
-            {
-                _physics.SetBodyType(gridUid, BodyType.Kinematic, body: body);
-                _physics.SetFixedRotation(gridUid, true, body: body);
-            }
-
-            Log.Debug("Pad set Kinematic body (parked) on {Grid}", ToPrettyString(gridUid));
-        }
-        else
-        {
-            Log.Warning("Pad: no ShuttleComponent on new grid {Grid}", ToPrettyString(gridUid));
+            _physics.SetBodyType(gridUid, BodyType.Kinematic, body: body);
+            _physics.SetFixedRotation(gridUid, true, body: body);
         }
 
         try
         {
-            SpawnPadHardware(ent, gridUid, size, half);
+            SpawnBlueprintHardware(ent, gridUid, cells, occupied, minX, minY, sizeX, sizeY);
         }
         catch (Exception e)
         {
-            Log.Error("Pad spawn entities failed on {Grid}: {Error}", ToPrettyString(gridUid), e);
+            Log.Error("Fabricator hardware spawn failed on {Grid}: {Error}", ToPrettyString(gridUid), e);
             QueueDel(gridUid);
             gridUid = default;
             return false;
@@ -289,41 +314,67 @@ public sealed class SubGridPadSystem : EntitySystem
 
         _subGrids.RebuildBumper((gridUid, sub));
         _subGrids.SyncAllPerimeters(gridUid);
-        Log.Info("Pad spawn complete: {Grid}", ToPrettyString(gridUid));
         return true;
     }
 
-    /// <summary>
-    /// Spawns antigrav, boarding stairs, shuttle console, cardinal thrusters, and a gyroscope.
-    /// Drive input comes from the console (same shuttle piloting path as normal ships).
-    /// </summary>
-    private void SpawnPadHardware(Entity<SubGridPadComponent> ent, EntityUid gridUid, int size, float half)
+    private void SpawnBlueprintHardware(
+        Entity<SubGridPadComponent> ent,
+        EntityUid gridUid,
+        SubGridFabricatorCell[] cells,
+        List<(int X, int Y, SubGridFabricatorCell Cell)> occupied,
+        int minX,
+        int minY,
+        int sizeX,
+        int sizeY)
     {
-        var antigrav = Spawn(ent.Comp.AntigravPrototype, new EntityCoordinates(gridUid, half, half));
-        Log.Debug("Pad spawned antigrav {Ent} at ({X},{Y})", ToPrettyString(antigrav), half, half);
-
-        var stair = Spawn("SubGridStairs", new EntityCoordinates(gridUid, half, 0.5f));
-        Log.Debug("Pad spawned stairs {Ent} at ({X},{Y})", ToPrettyString(stair), half, 0.5f);
-
-        // Console on SW tile — clear of stairs (south mid) and antigrav (center).
-        var console = Spawn(ent.Comp.ConsolePrototype, new EntityCoordinates(gridUid, 0.5f, 0.5f));
-        Log.Debug("Pad spawned console {Ent}", ToPrettyString(console));
-
-        // Mid-edge thrusters for N/E/W; south thruster offset to SE (stairs occupy south mid).
-        SpawnOriented(ent.Comp.ThrusterPrototype, gridUid, new Vector2(half, size - 0.5f), Direction.North);
-        SpawnOriented(ent.Comp.ThrusterPrototype, gridUid, new Vector2(size - 0.5f, half), Direction.East);
-        SpawnOriented(ent.Comp.ThrusterPrototype, gridUid, new Vector2(size - 0.5f, 0.5f), Direction.South);
-        SpawnOriented(ent.Comp.ThrusterPrototype, gridUid, new Vector2(0.5f, half), Direction.West);
-
-        var gyro = Spawn(ent.Comp.GyroscopePrototype, new EntityCoordinates(gridUid, size - 0.5f, size - 0.5f));
-        Log.Debug("Pad spawned gyroscope {Ent}", ToPrettyString(gyro));
+        foreach (var (x, y, cell) in occupied)
+        {
+            var local = new Vector2(x - minX + 0.5f, y - minY + 0.5f);
+            switch (cell)
+            {
+                case SubGridFabricatorCell.Core:
+                    Spawn(ent.Comp.AntigravPrototype, new EntityCoordinates(gridUid, local));
+                    break;
+                case SubGridFabricatorCell.Console:
+                    Spawn(ent.Comp.ConsolePrototype, new EntityCoordinates(gridUid, local));
+                    break;
+                case SubGridFabricatorCell.Gyroscope:
+                    Spawn(ent.Comp.GyroscopePrototype, new EntityCoordinates(gridUid, local));
+                    break;
+                case SubGridFabricatorCell.StairsNorth:
+                case SubGridFabricatorCell.StairsEast:
+                case SubGridFabricatorCell.StairsSouth:
+                case SubGridFabricatorCell.StairsWest:
+                {
+                    var stair = Spawn(ent.Comp.StairsPrototype, new EntityCoordinates(gridUid, local));
+                    _transform.SetLocalRotation(stair, CardinalDirection(cell).ToAngle());
+                    var access = EnsureComp<SubGridAccessComponent>(stair);
+                    access.OwnerGrid = gridUid;
+                    access.Tile = new Vector2i(x - minX, y - minY);
+                    Dirty(stair, access);
+                    _subGrids.RegisterBoardingTile(gridUid, access.Tile);
+                    break;
+                }
+                case SubGridFabricatorCell.ThrusterNorth:
+                case SubGridFabricatorCell.ThrusterEast:
+                case SubGridFabricatorCell.ThrusterSouth:
+                case SubGridFabricatorCell.ThrusterWest:
+                {
+                    var thruster = Spawn(ent.Comp.ThrusterPrototype, new EntityCoordinates(gridUid, local));
+                    // Thruster exhaust faces opposite the placement cardinal (sprite/thrust axis).
+                    _transform.SetLocalRotation(thruster, CardinalDirection(cell).GetOpposite().ToAngle());
+                    break;
+                }
+            }
+        }
     }
 
-    private void SpawnOriented(EntProtoId prototype, EntityUid gridUid, Vector2 local, Direction facing)
+    private static Direction CardinalDirection(SubGridFabricatorCell cell) => cell switch
     {
-        var uid = Spawn(prototype, new EntityCoordinates(gridUid, local));
-        _transform.SetLocalRotation(uid, facing.ToAngle());
-        Log.Debug("Pad spawned {Proto} {Ent} at {Pos} facing {Dir}",
-            prototype, ToPrettyString(uid), local, facing);
-    }
+        SubGridFabricatorCell.StairsNorth or SubGridFabricatorCell.ThrusterNorth => Direction.North,
+        SubGridFabricatorCell.StairsEast or SubGridFabricatorCell.ThrusterEast => Direction.East,
+        SubGridFabricatorCell.StairsSouth or SubGridFabricatorCell.ThrusterSouth => Direction.South,
+        SubGridFabricatorCell.StairsWest or SubGridFabricatorCell.ThrusterWest => Direction.West,
+        _ => Direction.South,
+    };
 }

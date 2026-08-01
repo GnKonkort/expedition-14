@@ -26,16 +26,13 @@ public sealed class SubGridAccessSystem : EntitySystem
     [Dependency] private readonly SharedStunSystem _stun = default!;
     [Dependency] private readonly DamageableSystem _damageable = default!;
     [Dependency] private readonly SharedTransformSystem _transform = default!;
-    [Dependency] private readonly EntityLookupSystem _lookup = default!;
     [Dependency] private readonly SharedMapSystem _map = default!;
     [Dependency] private readonly SharedPhysicsSystem _physics = default!;
     [Dependency] private readonly IGameTiming _timing = default!;
-    [Dependency] private readonly SubGridDebugLog _dbg = default!;
     [Dependency] private readonly SharedSubGridCollisionSystem _collision = default!;
 
-    private const float BoardingPointRange = 0.55f;
     private static readonly TimeSpan FallStun = TimeSpan.FromSeconds(2);
-    private static readonly TimeSpan UnderCheckInterval = TimeSpan.FromSeconds(0.05);
+    private static readonly TimeSpan UnderCheckInterval = TimeSpan.FromSeconds(0.2);
 
     private readonly Dictionary<EntityUid, TimeSpan> _ignoreUntil = new();
     /// <summary>Mobs allowed aboard via stairs/dock/EVA — fall-exit stun only applies to these.</summary>
@@ -50,69 +47,51 @@ public sealed class SubGridAccessSystem : EntitySystem
         SubscribeLocalEvent<MobStateComponent, EntityTerminatingEvent>(OnMobTerminating);
         SubscribeLocalEvent<DockingComponent, MapInitEvent>(OnDockMapInit);
         SubscribeLocalEvent<DockEvent>(OnDocked);
-        Log.Info("SubGridAccessSystem initialized (board debug -> {Path})", _dbg.Path);
+        Log.Info("SubGridAccessSystem initialized");
     }
 
-    /// <summary>True if the entity is on this SubGrid's boarded whitelist.</summary>
-    public bool IsBarrierWhitelisted(EntityUid subGrid, EntityUid entity)
+    /// <summary>True if the entity is standing on / parented to this SubGrid.</summary>
+    public bool IsOnSubGrid(EntityUid subGrid, EntityUid entity)
     {
-        return TryComp(subGrid, out SubGridComponent? sg) && sg.BarrierPassThrough.Contains(entity);
+        var xform = Transform(entity);
+        return xform.GridUid == subGrid || xform.ParentUid == subGrid;
     }
 
     /// <summary>
     /// True if boarding barriers for this SubGrid must ignore the entity:
-    /// already aboard (whitelist), or currently at this SubGrid's stairs/dock access.
+    /// on the SubGrid (GridUid/parent), or currently at this SubGrid's stairs/dock access.
     /// </summary>
     public bool HasBarrierPass(EntityUid subGrid, EntityUid entity)
     {
         return _collision.HasBarrierPass(subGrid, entity);
     }
 
-    private void GrantBarrierPass(EntityUid subGrid, EntityUid mob)
+    /// <summary>Mark as legally boarded (for fall-exit stun). Barriers use GridUid, not a whitelist.</summary>
+    private void MarkAuthorized(EntityUid mob)
     {
-        _authorizedAboard.Add(mob);
-        if (!TryComp(subGrid, out SubGridComponent? sg))
+        if (!_authorizedAboard.Add(mob))
+        {
+            if (TryComp(mob, out TransformComponent? x) && x.GridTraversal)
+                x.GridTraversal = false;
             return;
+        }
 
-        if (!sg.BarrierPassThrough.Add(mob))
-            return;
-
-        Dirty(subGrid, sg);
-        _dbg.Write("access.pass+", $"mob={ToPrettyString(mob)} grid={ToPrettyString(subGrid)} count={sg.BarrierPassThrough.Count}");
-
-        // Drop any lingering barrier contacts so movement isn't jerky for a few ticks.
-        if (TryComp(mob, out PhysicsComponent? body))
-            _physics.RegenerateContacts((mob, body));
+        if (TryComp(mob, out TransformComponent? xform))
+            xform.GridTraversal = false;
     }
 
-    private void RevokeBarrierPass(EntityUid mob, EntityUid? subGrid = null)
+    private void ClearAuthorized(EntityUid mob)
     {
-        _authorizedAboard.Remove(mob);
-
-        if (subGrid != null && TryComp(subGrid.Value, out SubGridComponent? one))
-        {
-            if (one.BarrierPassThrough.Remove(mob))
-            {
-                Dirty(subGrid.Value, one);
-                _dbg.Write("access.pass-", $"mob={ToPrettyString(mob)} grid={ToPrettyString(subGrid.Value)} count={one.BarrierPassThrough.Count}");
-            }
+        if (!_authorizedAboard.Remove(mob))
             return;
-        }
 
-        var query = EntityQueryEnumerator<SubGridComponent>();
-        while (query.MoveNext(out var gridUid, out var sg))
-        {
-            if (!sg.BarrierPassThrough.Remove(mob))
-                continue;
-
-            Dirty(gridUid, sg);
-            _dbg.Write("access.pass-", $"mob={ToPrettyString(mob)} grid={ToPrettyString(gridUid)} count={sg.BarrierPassThrough.Count}");
-        }
+        if (TryComp(mob, out TransformComponent? xform))
+            xform.GridTraversal = true;
     }
 
     private void OnMobTerminating(EntityUid uid, MobStateComponent mob, ref EntityTerminatingEvent args)
     {
-        RevokeBarrierPass(uid);
+        ClearAuthorized(uid);
         _ignoreUntil.Remove(uid);
     }
 
@@ -168,6 +147,13 @@ public sealed class SubGridAccessSystem : EntitySystem
                 if (!_map.TryGetTileRef(gridUid, grid, indices, out var tile) || tile.Tile.IsEmpty)
                     continue;
 
+                // Stolen riders (authorized but parented to host) — put them back, don't eject.
+                if (_authorizedAboard.Contains(mob))
+                {
+                    ReclaimOntoSubGrid(mob, mobXform, gridUid, wasAuthorized: true);
+                    continue;
+                }
+
                 // Only exempt the immediate stair tile approach — not the whole pad.
                 if (IsAtBoardingPoint(mob))
                     continue;
@@ -187,28 +173,81 @@ public sealed class SubGridAccessSystem : EntitySystem
     private bool IsAtBoardingPoint(EntityUid mob, out EntityUid? accessHit)
     {
         accessHit = null;
-        var coords = _transform.GetMoverCoordinates(mob);
-        foreach (var ent in _lookup.GetEntitiesInRange(coords, BoardingPointRange))
-        {
-            if (!HasComp<SubGridAccessComponent>(ent))
-                continue;
+        if (!_collision.IsNearBoardingTile(mob, null, out var subGridHit, out var tile))
+            return false;
 
-            accessHit = ent;
-            return true;
+        // Prefer a concrete stairs/dock entity for debug; tile registry is authoritative.
+        if (subGridHit is { } gridUid &&
+            TryComp(gridUid, out MapGridComponent? grid) &&
+            TryGetAccessOnTile(gridUid, grid, tile, out var access) &&
+            access != null)
+        {
+            accessHit = access;
+        }
+        else
+        {
+            accessHit = subGridHit;
         }
 
-        return false;
+        return true;
     }
 
     private bool TryGetAccessOnTile(EntityUid gridUid, MapGridComponent grid, Vector2i indices, out EntityUid? access)
     {
         access = null;
+
+        if (TryComp(gridUid, out SubGridComponent? sub) && sub.BoardingTiles.Contains(indices))
+        {
+            // Prefer a live access entity for logging / messages.
+            foreach (var ent in _map.GetAnchoredEntities(gridUid, grid, indices))
+            {
+                if (!HasComp<SubGridAccessComponent>(ent))
+                    continue;
+
+                access = ent;
+                return true;
+            }
+
+            var owned = EntityQueryEnumerator<SubGridAccessComponent>();
+            while (owned.MoveNext(out var uid, out var accessComp))
+            {
+                if (accessComp.OwnerGrid != gridUid || accessComp.Tile != indices)
+                    continue;
+
+                access = uid;
+                return true;
+            }
+
+            // Tile is a boarding point even if the stair entity drifted away.
+            return true;
+        }
+
         foreach (var ent in _map.GetAnchoredEntities(gridUid, grid, indices))
         {
             if (!HasComp<SubGridAccessComponent>(ent))
                 continue;
 
             access = ent;
+            return true;
+        }
+
+        // Unanchored / drifted stairs still claiming this SubGrid tile via OwnerGrid.
+        var query = EntityQueryEnumerator<SubGridAccessComponent, TransformComponent>();
+        while (query.MoveNext(out var uid, out var accessComp, out var xform))
+        {
+            if (accessComp.OwnerGrid == gridUid && accessComp.Tile == indices)
+            {
+                access = uid;
+                return true;
+            }
+
+            if (xform.GridUid != gridUid && xform.ParentUid != gridUid)
+                continue;
+
+            if (_map.WorldToTile(gridUid, grid, _transform.GetWorldPosition(xform)) != indices)
+                continue;
+
+            access = uid;
             return true;
         }
 
@@ -317,12 +356,12 @@ public sealed class SubGridAccessSystem : EntitySystem
             if (xform.GridUid is not { } gridUid || !HasComp<SubGridComponent>(gridUid))
                 continue;
 
-            if (_authorizedAboard.Contains(mob) || IsBarrierWhitelisted(gridUid, mob))
+            if (_authorizedAboard.Contains(mob))
                 continue;
 
             if (_gravity.IsWeightless(mob) || IsAtBoardingPoint(mob))
             {
-                GrantBarrierPass(gridUid, mob);
+                MarkAuthorized(mob);
                 Log.Info("SubGrid board authorized (late): {Mob} on {Grid}", ToPrettyString(mob), ToPrettyString(gridUid));
                 continue;
             }
@@ -332,7 +371,7 @@ public sealed class SubGridAccessSystem : EntitySystem
                 var tile = _map.WorldToTile(gridUid, grid, _transform.GetWorldPosition(xform));
                 if (TryGetAccessOnTile(gridUid, grid, tile, out _))
                 {
-                    GrantBarrierPass(gridUid, mob);
+                    MarkAuthorized(mob);
                     Log.Info("SubGrid board authorized (stairs tile): {Mob} on {Grid}", ToPrettyString(mob), ToPrettyString(gridUid));
                     continue;
                 }
@@ -363,7 +402,7 @@ public sealed class SubGridAccessSystem : EntitySystem
         if (ignoring && oldWasSub && !newIsSub)
         {
             Log.Debug("SubGrid exit ignored (bounce cooldown): {Mob}", ToPrettyString(uid));
-            RevokeBarrierPass(uid, oldParent);
+            ClearAuthorized(uid);
             return;
         }
 
@@ -373,18 +412,26 @@ public sealed class SubGridAccessSystem : EntitySystem
 
         EntityUid? stairsOnLanding = null;
         Vector2i? landingTile = null;
+        var landingIsBoarding = false;
         if (newIsSub && newGrid != null && TryComp(newGrid.Value, out MapGridComponent? newMapGrid))
         {
             landingTile = _map.WorldToTile(newGrid.Value, newMapGrid, mobWorld);
             TryGetAccessOnTile(newGrid.Value, newMapGrid, landingTile.Value, out stairsOnLanding);
+            landingIsBoarding = stairsOnLanding != null ||
+                (TryComp(newGrid.Value, out SubGridComponent? landSub) &&
+                 landSub.BoardingTiles.Contains(landingTile.Value));
         }
 
         EntityUid? stairsOnExit = null;
         Vector2i? exitTile = null;
+        var exitIsBoarding = false;
         if (oldWasSub && oldParent != null && TryComp(oldParent.Value, out MapGridComponent? oldMapGrid))
         {
             exitTile = _map.WorldToTile(oldParent.Value, oldMapGrid, mobWorld);
             TryGetAccessOnTile(oldParent.Value, oldMapGrid, exitTile.Value, out stairsOnExit);
+            exitIsBoarding = stairsOnExit != null ||
+                (TryComp(oldParent.Value, out SubGridComponent? exitSub) &&
+                 exitSub.BoardingTiles.Contains(exitTile.Value));
         }
 
         Log.Debug(
@@ -403,20 +450,15 @@ public sealed class SubGridAccessSystem : EntitySystem
             weightless,
             ignoring);
 
-        _dbg.Write(
-            "access.traverse",
-            $"mob={ToPrettyString(uid)} oldParent={(oldParent == null ? "null" : ToPrettyString(oldParent.Value))} newGrid={(newGrid == null ? "null" : ToPrettyString(newGrid.Value))} oldSub={oldWasSub} newSub={newIsSub} atBoarding={atBoarding} boardingHit={(boardingHit == null ? "none" : ToPrettyString(boardingHit.Value))} landing={landingTile?.ToString() ?? "n/a"} stairsLand={(stairsOnLanding == null ? "none" : ToPrettyString(stairsOnLanding.Value))} exit={exitTile?.ToString() ?? "n/a"} stairsExit={(stairsOnExit == null ? "none" : ToPrettyString(stairsOnExit.Value))} wl={weightless} ignoring={ignoring} world={mobWorld}");
-
         if (newIsSub && !oldWasSub)
         {
-            var allowBoard = weightless || atBoarding || stairsOnLanding != null;
+            var allowBoard = weightless || atBoarding || landingIsBoarding;
             if (allowBoard)
             {
-                GrantBarrierPass(newGrid!.Value, uid);
+                MarkAuthorized(uid);
                 var reason = weightless ? "weightless" : atBoarding ? "boarding-point" : "stairs-on-tile";
                 Log.Info("SubGrid board allowed: {Mob} reason={Reason}",
                     ToPrettyString(uid), reason);
-                _dbg.Write("access.board", $"ALLOW mob={ToPrettyString(uid)} reason={reason} landing={landingTile}");
                 return;
             }
 
@@ -425,8 +467,6 @@ public sealed class SubGridAccessSystem : EntitySystem
                 ToPrettyString(uid),
                 landingTile?.ToString() ?? "n/a",
                 stairsOnLanding == null ? "none" : ToPrettyString(stairsOnLanding.Value));
-            _dbg.Write("access.board",
-                $"DENY mob={ToPrettyString(uid)} landing={landingTile?.ToString() ?? "n/a"} stairs={(stairsOnLanding == null ? "none" : ToPrettyString(stairsOnLanding.Value))}");
             // Soft reject: undo parent change. No stun/teleport spam.
             BlockIllegalBoard(uid, xform, oldParent, newGrid!.Value);
             return;
@@ -435,19 +475,27 @@ public sealed class SubGridAccessSystem : EntitySystem
         // SubGrid → SubGrid transfer.
         if (oldWasSub && newIsSub && oldParent != null && newGrid != null && oldParent != newGrid)
         {
-            RevokeBarrierPass(uid, oldParent);
-            GrantBarrierPass(newGrid.Value, uid);
-            _dbg.Write("access.transfer",
-                $"mob={ToPrettyString(uid)} from={ToPrettyString(oldParent.Value)} to={ToPrettyString(newGrid.Value)}");
+            ClearAuthorized(uid);
+            MarkAuthorized(uid);
             return;
         }
 
         if (oldWasSub && !newIsSub)
         {
-            var wasAuthorized = _authorizedAboard.Contains(uid) ||
-                                (oldParent != null && IsBarrierWhitelisted(oldParent.Value, uid));
-            RevokeBarrierPass(uid, oldParent);
-            var allowExit = weightless || atBoarding || stairsOnExit != null;
+            var wasAuthorized = _authorizedAboard.Contains(uid);
+
+            // Host steal under the pad footprint is never a legitimate stairs exit —
+            // even when atBoarding (stairs still sit on solid SubGrid tiles over the host).
+            if (oldParent != null &&
+                TryComp(oldParent.Value, out SubGridComponent? oldSubComp) &&
+                IsHostSteal(oldSubComp, newGrid, xform.ParentUid) &&
+                IsOverSolidSubFloor(oldParent.Value, mobWorld))
+            {
+                ReclaimOntoSubGrid(uid, xform, oldParent.Value, wasAuthorized);
+                return;
+            }
+
+            var allowExit = weightless || atBoarding || exitIsBoarding;
 
             // Stepping off the pad one tile past stairs (e.g. exitTile south of boarding) —
             // parent change fires after leaving BoardingPointRange.
@@ -468,12 +516,13 @@ public sealed class SubGridAccessSystem : EntitySystem
                 }
             }
 
+            ClearAuthorized(uid);
+
             if (allowExit)
             {
                 var reason = weightless ? "weightless" : atBoarding ? "boarding-point" : stairsOnExit != null ? "stairs-on-tile" : "stairs-adjacent";
                 Log.Info("SubGrid exit allowed: {Mob} reason={Reason}",
                     ToPrettyString(uid), reason);
-                _dbg.Write("access.exit", $"ALLOW mob={ToPrettyString(uid)} reason={reason} exitTile={exitTile} wasAuth={wasAuthorized}");
                 return;
             }
 
@@ -481,7 +530,6 @@ public sealed class SubGridAccessSystem : EntitySystem
             if (!wasAuthorized)
             {
                 Log.Debug("SubGrid exit silent (unauthorized): {Mob}", ToPrettyString(uid));
-                _dbg.Write("access.exit", $"SILENT (unauthorized) mob={ToPrettyString(uid)} exitTile={exitTile}");
                 return;
             }
 
@@ -490,11 +538,57 @@ public sealed class SubGridAccessSystem : EntitySystem
                 ToPrettyString(uid),
                 exitTile?.ToString() ?? "n/a",
                 stairsOnExit == null ? "none" : ToPrettyString(stairsOnExit.Value));
-            _dbg.Write("access.exit",
-                $"FALL stun mob={ToPrettyString(uid)} exitTile={exitTile?.ToString() ?? "n/a"} stairs={(stairsOnExit == null ? "none" : ToPrettyString(stairsOnExit.Value))}");
             _stun.TryKnockdown(uid, FallStun, true);
             _damageable.TryChangeDamage(uid,
                 new DamageSpecifier { DamageDict = { ["Blunt"] = 8f } });
+        }
+    }
+
+    private static bool IsHostSteal(SubGridComponent oldSub, EntityUid? newGrid, EntityUid newParent)
+    {
+        if (oldSub.HostGrid is not { } host)
+            return false;
+        return newGrid == host || newParent == host;
+    }
+
+    private bool IsOverSolidSubFloor(EntityUid subGrid, Vector2 world)
+    {
+        if (!TryComp(subGrid, out MapGridComponent? grid))
+            return false;
+
+        var tile = _map.WorldToTile(subGrid, grid, world);
+        return _map.TryGetTileRef(subGrid, grid, tile, out var tileRef) && !tileRef.Tile.IsEmpty;
+    }
+
+    /// <summary>Undo GridTraversal host-steal: put the mob back on the SubGrid at the same world pose.</summary>
+    private void ReclaimOntoSubGrid(EntityUid uid, TransformComponent xform, EntityUid subGrid, bool wasAuthorized)
+    {
+        if (_inBounce)
+            return;
+
+        _inBounce = true;
+        try
+        {
+            if (!wasAuthorized)
+                MarkAuthorized(uid);
+
+            _ignoreUntil[uid] = _timing.CurTime + TimeSpan.FromMilliseconds(100);
+
+            var world = _transform.GetWorldPosition(xform);
+            var local = Vector2.Transform(world, _transform.GetInvWorldMatrix(Transform(subGrid)));
+            _transform.SetCoordinates(uid, new EntityCoordinates(subGrid, local));
+
+            if (TryComp(uid, out TransformComponent? after))
+                after.GridTraversal = false;
+
+            if (TryComp(uid, out PhysicsComponent? body))
+                _physics.SetLinearVelocity(uid, Vector2.Zero, body: body);
+
+            Log.Info("SubGrid reclaim after host steal: {Mob} -> {Grid}", ToPrettyString(uid), ToPrettyString(subGrid));
+        }
+        finally
+        {
+            _inBounce = false;
         }
     }
 
@@ -510,10 +604,8 @@ public sealed class SubGridAccessSystem : EntitySystem
         _inBounce = true;
         try
         {
-            RevokeBarrierPass(uid, deniedSubGrid);
+            ClearAuthorized(uid);
             _ignoreUntil[uid] = _timing.CurTime + TimeSpan.FromSeconds(0.2);
-            _dbg.Write("access.block",
-                $"BlockIllegalBoard mob={ToPrettyString(uid)} deniedSub={ToPrettyString(deniedSubGrid)} oldParent={(oldParent == null ? "null" : ToPrettyString(oldParent.Value))}");
 
             // Nudge just outside the pad footprint (small margin — not a throw).
             if (TryComp(deniedSubGrid, out MapGridComponent? subGrid) &&

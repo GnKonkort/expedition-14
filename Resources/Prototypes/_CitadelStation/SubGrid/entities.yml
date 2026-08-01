@@ -2,7 +2,7 @@
   parent: BaseMachinePowered
   id: SubGridPad
   name: sub-grid fabricator
-  description: Consumes 5 steel and 5 uranium sheets from its slots to extrude a small antigrav vehicle pad. Click with sheets to fill either material slot.
+  description: Design a vehicle pad on a 7×15 grid, then assemble it with steel and uranium sheets.
   placement:
     mode: SnapgridCenter
   components:
@@ -18,6 +18,13 @@
     powerLoad: 200
   - type: ExtensionCableReceiver
   - type: SubGridPad
+  - type: ActivatableUI
+    key: enum.SubGridFabricatorUiKey.Key
+  - type: ActivatableUIRequiresPower
+  - type: UserInterface
+    interfaces:
+      enum.SubGridFabricatorUiKey.Key:
+        type: SubGridFabricatorBoundUserInterface
   - type: ItemSlots
     slots:
       steel_slot:
@@ -139,7 +146,7 @@
   - type: InteractionOutline
   - type: Clickable
 
-# Linear thruster for SubGrid — same thrust profile as a normal thruster; no space/APC needed.
+# Linear thruster for SubGrid — slightly stronger than a stock thruster; no space/APC needed.
 - type: entity
   parent: BaseThruster
   id: SubGridThruster
@@ -148,6 +155,8 @@
   components:
   - type: Thruster
     requireSpace: false
+    baseThrust: 130
+    thrust: 130
   - type: ApcPowerReceiver
     needsPower: false
     powerLoad: 0

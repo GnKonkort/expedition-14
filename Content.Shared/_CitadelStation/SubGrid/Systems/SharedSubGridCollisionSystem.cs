@@ -3,31 +3,31 @@ using Content.Shared.Projectiles;
 using Content.Shared._CitadelStation.SubGrid.Components;
 using Content.Shared.Tag;
 using Content.Shared.Throwing;
+using Robust.Shared.Map;
 using Robust.Shared.Map.Components;
 using Robust.Shared.Physics.Components;
 using Robust.Shared.Physics.Events;
-using Robust.Shared.Physics.Systems;
 using Robust.Shared.Prototypes;
-using System.Globalization;
+using System.Numerics;
 
 namespace Content.Shared._CitadelStation.SubGrid.Systems;
 
 /// <summary>
 /// Shared SubGrid collision rules so client prediction matches the server:
 /// phase through foreign MapGrid hulls while on a pad, ignore boarding barriers
-/// when whitelisted / standing at that SubGrid's stairs, and isolate entities
-/// under a SubGrid from entities on it (except projectiles and thrown items).
+/// while GridUid/parent is that SubGrid (or standing at its stairs), and isolate
+/// entities under a SubGrid from entities on it (except projectiles and thrown items).
 /// </summary>
 public sealed class SharedSubGridCollisionSystem : EntitySystem
 {
-    [Dependency] private readonly EntityLookupSystem _lookup = default!;
     [Dependency] private readonly SharedTransformSystem _transform = default!;
-    [Dependency] private readonly SharedPhysicsSystem _physics = default!;
-    [Dependency] private readonly SharedSubGridDebugLogSystem _dbg = default!;
     [Dependency] private readonly TagSystem _tags = default!;
 
-    private const float BoardingPointRange = 0.55f;
-    private static readonly TimeSpan PreventLogInterval = TimeSpan.FromMilliseconds(50);
+    /// <summary>
+    /// Slightly over half-tile so boarding still works while the mother grid is moving
+    /// (mob / SubGrid samples can be a frame apart).
+    /// </summary>
+    public const float BoardingPointRange = 1.1f;
     private static readonly ProtoId<TagPrototype> WallTag = "Wall";
     private static readonly ProtoId<TagPrototype> WindowTag = "Window";
 
@@ -49,50 +49,71 @@ public sealed class SharedSubGridCollisionSystem : EntitySystem
         _thrownQuery = GetEntityQuery<ThrownItemComponent>();
 
         SubscribeLocalEvent<SubGridComponent, PreventCollideEvent>(OnHullPreventCollide);
-        SubscribeLocalEvent<SubGridComponent, AfterAutoHandleStateEvent>(OnSubGridHandleState);
         SubscribeLocalEvent<SubGridPerimeterComponent, PreventCollideEvent>(OnPerimeterPreventCollide);
         SubscribeLocalEvent<MobStateComponent, PreventCollideEvent>(OnMobPreventCollide);
         // Broad isolation: entities under a SubGrid must not push/block entities on it.
         SubscribeLocalEvent<PhysicsComponent, PreventCollideEvent>(OnPhysicsIsolate);
     }
 
-    /// <summary>True if <paramref name="entity"/> may pass this SubGrid's boarding barriers.</summary>
+    /// <summary>
+    /// True if <paramref name="entity"/> may pass this SubGrid's boarding barriers:
+    /// standing on / parented to the SubGrid, or near one of its registered boarding tiles.
+    /// </summary>
     public bool HasBarrierPass(EntityUid subGrid, EntityUid entity)
     {
-        if (_subQuery.TryComp(subGrid, out var sg) && sg.BarrierPassThrough.Contains(entity))
+        var xform = Transform(entity);
+        if (xform.GridUid == subGrid || xform.ParentUid == subGrid)
             return true;
 
-        // Soft-pass: approaching via this SubGrid's stairs/dock before whitelist replicates.
-        if (!IsAtBoardingPoint(entity, out var hit) || hit == null)
-            return false;
-
-        return Transform(hit.Value).GridUid == subGrid;
+        // Soft-pass from BoardingTiles (SubGrid transform), not stair entity pose.
+        return IsNearBoardingTile(entity, subGrid, out _, out _);
     }
 
-    private bool IsAtBoardingPoint(EntityUid mob, out EntityUid? accessHit)
+    /// <summary>
+    /// Near a SubGrid boarding tile center computed from the SubGrid world matrix.
+    /// Independent of whether the stair entity has drifted onto the host.
+    /// </summary>
+    public bool IsNearBoardingTile(
+        EntityUid mob,
+        EntityUid? onlySubGrid,
+        out EntityUid? subGridHit,
+        out Vector2i tile,
+        float range = BoardingPointRange)
     {
-        accessHit = null;
-        var coords = _transform.GetMoverCoordinates(mob);
-        foreach (var ent in _lookup.GetEntitiesInRange(coords, BoardingPointRange))
+        subGridHit = null;
+        tile = default;
+
+        var mobXform = Transform(mob);
+        if (mobXform.MapID == MapId.Nullspace)
+            return false;
+
+        var mobPos = _transform.GetWorldPosition(mobXform);
+        var rangeSq = range * range;
+        var query = EntityQueryEnumerator<SubGridComponent, MapGridComponent, TransformComponent>();
+        while (query.MoveNext(out var gridUid, out var sub, out var grid, out var xform))
         {
-            if (!HasComp<SubGridAccessComponent>(ent))
+            if (onlySubGrid != null && gridUid != onlySubGrid.Value)
                 continue;
 
-            accessHit = ent;
-            return true;
+            if (xform.MapID != mobXform.MapID || sub.BoardingTiles.Count == 0)
+                continue;
+
+            var worldMatrix = _transform.GetWorldMatrix(xform);
+            var tileSize = grid.TileSize;
+            foreach (var indices in sub.BoardingTiles)
+            {
+                var local = new Vector2((indices.X + 0.5f) * tileSize, (indices.Y + 0.5f) * tileSize);
+                var world = Vector2.Transform(local, worldMatrix);
+                if ((world - mobPos).LengthSquared() > rangeSq)
+                    continue;
+
+                subGridHit = gridUid;
+                tile = indices;
+                return true;
+            }
         }
 
         return false;
-    }
-
-    private void OnSubGridHandleState(EntityUid uid, SubGridComponent comp, ref AfterAutoHandleStateEvent args)
-    {
-        // Drop stale barrier contacts after whitelist replicates to the client.
-        foreach (var mob in comp.BarrierPassThrough)
-        {
-            if (TryComp(mob, out PhysicsComponent? body))
-                _physics.RegenerateContacts((mob, body));
-        }
     }
 
     private void OnHullPreventCollide(EntityUid uid, SubGridComponent comp, ref PreventCollideEvent args)
@@ -101,15 +122,6 @@ public sealed class SharedSubGridCollisionSystem : EntitySystem
             return;
 
         args.Cancelled = true;
-        _dbg.WriteThrottle(
-            "hull.pc:" + uid + ":" + args.OtherEntity,
-            PreventLogInterval,
-            "hull.prevent",
-            string.Format(
-                CultureInfo.InvariantCulture,
-                "CANCEL SubGrid vs MapGrid us={0} other={1}",
-                ToPrettyString(uid),
-                ToPrettyString(args.OtherEntity)));
     }
 
     private void OnPerimeterPreventCollide(EntityUid uid, SubGridPerimeterComponent comp, ref PreventCollideEvent args)
@@ -117,7 +129,6 @@ public sealed class SharedSubGridCollisionSystem : EntitySystem
         if (_gridQuery.HasComp(args.OtherEntity))
         {
             args.Cancelled = true;
-            LogPreventBarrier(uid, comp, args.OtherEntity, cancelled: true, reason: "vs MapGrid");
             return;
         }
 
@@ -129,13 +140,7 @@ public sealed class SharedSubGridCollisionSystem : EntitySystem
 
         var owner = ResolveOwner(uid, comp);
         if (owner != default && HasBarrierPass(owner, args.OtherEntity))
-        {
             args.Cancelled = true;
-            LogPreventBarrier(uid, comp, args.OtherEntity, cancelled: true, reason: "whitelist/soft");
-            return;
-        }
-
-        LogPreventBarrier(uid, comp, args.OtherEntity, cancelled: false, reason: "block outsider");
     }
 
     private void OnMobPreventCollide(EntityUid uid, MobStateComponent mob, ref PreventCollideEvent args)
@@ -149,17 +154,6 @@ public sealed class SharedSubGridCollisionSystem : EntitySystem
         if (onSub && _gridQuery.HasComp(args.OtherEntity) && args.OtherEntity != ourGrid)
         {
             args.Cancelled = true;
-            _dbg.WriteThrottle(
-                "mob.pc.grid:" + uid + ":" + args.OtherEntity,
-                PreventLogInterval,
-                "prevent.mob",
-                string.Format(
-                    CultureInfo.InvariantCulture,
-                    "CANCEL mob vs MapGrid mob={0} grid={1} parent={2} other={3}",
-                    ToPrettyString(uid),
-                    ourGrid,
-                    xform.ParentUid,
-                    ToPrettyString(args.OtherEntity)));
             return;
         }
 
@@ -168,33 +162,9 @@ public sealed class SharedSubGridCollisionSystem : EntitySystem
 
         var owner = ResolveOwner(args.OtherEntity, peri);
         if (owner == default || !HasBarrierPass(owner, uid))
-        {
-            _dbg.WriteThrottle(
-                "prevent.mob:" + uid + ":" + args.OtherEntity + ":False",
-                PreventLogInterval,
-                "prevent.mob",
-                string.Format(
-                    CultureInfo.InvariantCulture,
-                    "ALLOW mob={0} grid={1} parent={2} other={3} peri=True cancelled=False",
-                    ToPrettyString(uid),
-                    xform.GridUid,
-                    xform.ParentUid,
-                    ToPrettyString(args.OtherEntity)));
             return;
-        }
 
         args.Cancelled = true;
-        _dbg.WriteThrottle(
-            "prevent.mob:" + uid + ":" + args.OtherEntity + ":True",
-            PreventLogInterval,
-            "prevent.mob",
-            string.Format(
-                CultureInfo.InvariantCulture,
-                "CANCEL whitelist mob={0} grid={1} parent={2} other={3} peri=True cancelled=True",
-                ToPrettyString(uid),
-                xform.GridUid,
-                xform.ParentUid,
-                ToPrettyString(args.OtherEntity)));
     }
 
     /// <summary>
@@ -210,15 +180,6 @@ public sealed class SharedSubGridCollisionSystem : EntitySystem
             return;
 
         args.Cancelled = true;
-        _dbg.WriteThrottle(
-            "iso.pc:" + uid + ":" + args.OtherEntity,
-            PreventLogInterval,
-            "prevent.isolate",
-            string.Format(
-                CultureInfo.InvariantCulture,
-                "CANCEL isolate a={0} b={1}",
-                ToPrettyString(uid),
-                ToPrettyString(args.OtherEntity)));
     }
 
     private bool ShouldIsolate(EntityUid a, EntityUid b)
@@ -275,31 +236,5 @@ public sealed class SharedSubGridCollisionSystem : EntitySystem
 
         var xform = Transform(barrier);
         return xform.GridUid ?? xform.ParentUid;
-    }
-
-    private void LogPreventBarrier(
-        EntityUid barrier,
-        SubGridPerimeterComponent comp,
-        EntityUid other,
-        bool cancelled,
-        string reason)
-    {
-        var ox = Transform(other);
-        _dbg.WriteThrottle(
-            "prevent.bar:" + barrier + ":" + other + ":" + cancelled,
-            PreventLogInterval,
-            "prevent.barrier",
-            string.Format(
-                CultureInfo.InvariantCulture,
-                "{0} barrier={1} tile={2} owner={3} other={4} otherGrid={5} otherParent={6} cancelled={7} reason={8}",
-                cancelled ? "CANCEL" : "ALLOW",
-                ToPrettyString(barrier),
-                comp.Tile,
-                comp.OwnerGrid,
-                ToPrettyString(other),
-                ox.GridUid,
-                ox.ParentUid,
-                cancelled,
-                reason));
     }
 }

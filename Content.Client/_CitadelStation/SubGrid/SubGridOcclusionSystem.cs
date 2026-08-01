@@ -89,7 +89,8 @@ public sealed class SubGridOcclusionSystem : EntitySystem
             if (!sprite.Visible)
                 continue;
 
-            _covered[uid] = sprite.DrawDepth;
+            var prevDepth = sprite.DrawDepth;
+            _covered[uid] = prevDepth;
             // Only push down if currently above the pad floor overlay.
             if (sprite.DrawDepth > CoveredDrawDepth)
                 _sprite.SetDrawDepth((uid, sprite), CoveredDrawDepth);

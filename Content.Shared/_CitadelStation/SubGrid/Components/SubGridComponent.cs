@@ -21,7 +21,7 @@ public sealed partial class SubGridComponent : Component
 
     /// <summary>Maximum tile count (including empty checks on expand).</summary>
     [DataField, AutoNetworkedField]
-    public int MaxTiles = 64;
+    public int MaxTiles = 128;
 
     /// <summary>Whether the antigrav core currently allows Dynamic movement.</summary>
     [DataField, AutoNetworkedField]
@@ -31,35 +31,52 @@ public sealed partial class SubGridComponent : Component
     public SubGridMovementMode Mode = SubGridMovementMode.Fighter;
 
     /// <summary>
+    /// Authoritative boarding/exit tiles (stairs/docks). Checked via SubGrid world transform,
+    /// not stair entity pose — survives host motion and temporary stair reparents.
+    /// </summary>
+    [DataField, AutoNetworkedField]
+    public HashSet<Vector2i> BoardingTiles = new();
+
+    /// <summary>
     /// Added to half-tile when building per-floor hull fixtures / wall resolve boxes.
     /// Negative = inset so the pad can sit flush against walls without an early physics gap.
     /// </summary>
     [DataField]
     public float BumperEnlarge = -0.02f;
 
-    /// <summary>
-    /// Entities currently aboard this SubGrid. Boarding barriers always ignore these
-    /// (no GridUid / parenting lag). Cleared when the entity leaves the grid.
-    /// Networked so client prediction can cancel barrier collisions while aboard.
-    /// </summary>
+    /// <summary>MapGrid currently under this SubGrid (station / shuttle).</summary>
     [DataField, AutoNetworkedField]
-    public HashSet<EntityUid> BarrierPassThrough = new();
-
-    /// <summary>MapGrid currently under this SubGrid (station / shuttle). Server follow state.</summary>
-    [ViewVariables]
     public EntityUid? HostGrid;
 
     /// <summary>SubGrid origin in host-local space while attached.</summary>
-    [ViewVariables]
+    [DataField, AutoNetworkedField]
     public Vector2 HostLocalPosition;
 
-    [ViewVariables]
+    [DataField, AutoNetworkedField]
     public Angle HostLocalRotation;
 
-    [ViewVariables]
+    [DataField, AutoNetworkedField]
     public bool HostPoseValid;
 
-    /// <summary>Previous host world sample for delta follow while driving.</summary>
+    /// <summary>Velocity relative to host, in host-local space. Thrusters change this while driving.</summary>
+    [DataField, AutoNetworkedField]
+    public Vector2 RelativeLinearVelocity;
+
+    [DataField, AutoNetworkedField]
+    public float RelativeAngularVelocity;
+
+    /// <summary>
+    /// Legacy flag from soft host-weld experiment. Always false now — soft welds jerked at high host speed.
+    /// Hard kinematic snap is used instead.
+    /// </summary>
+    [DataField, AutoNetworkedField]
+    public bool HostWelded;
+
+    /// <summary>Legacy weld joint id; cleared on attach.</summary>
+    [ViewVariables]
+    public string? HostWeldJointId;
+
+    /// <summary>Previous host world sample for delta follow while driving (server / prediction local).</summary>
     [ViewVariables]
     public Vector2 LastHostWorldPosition;
 
@@ -74,11 +91,4 @@ public sealed partial class SubGridComponent : Component
 
     [ViewVariables]
     public bool HostMotionSampleValid;
-
-    /// <summary>Velocity relative to host, in host-local space. Thrusters change this while driving.</summary>
-    [ViewVariables]
-    public Vector2 RelativeLinearVelocity;
-
-    [ViewVariables]
-    public float RelativeAngularVelocity;
 }

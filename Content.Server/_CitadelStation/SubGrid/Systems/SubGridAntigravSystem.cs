@@ -1,3 +1,4 @@
+using System.Numerics;
 using Content.Server.Shuttles.Components;
 using Content.Server.Shuttles.Systems;
 using Content.Shared.Destructible;
@@ -13,9 +14,13 @@ namespace Content.Server._CitadelStation.SubGrid.Systems;
 
 /// <summary>
 /// Antigrav core: toggles sub-grid drive and cycles movement modes.
+/// Drive cannot be unlocked while the mother (host) grid is moving; host motion force-parks.
 /// </summary>
 public sealed class SubGridAntigravSystem : EntitySystem
 {
+    /// <summary>Linear / angular speed below this counts as stopped.</summary>
+    public const float HostStillEpsilon = 0.05f;
+
     [Dependency] private readonly SharedPopupSystem _popup = default!;
     [Dependency] private readonly ShuttleSystem _shuttle = default!;
     [Dependency] private readonly SubGridMovementSystem _movement = default!;
@@ -60,11 +65,7 @@ public sealed class SubGridAntigravSystem : EntitySystem
     private void OnGetVerbs(Entity<SubGridAntigravComponent> ent, ref GetVerbsEvent<AlternativeVerb> args)
     {
         if (!args.CanAccess || !args.CanInteract)
-        {
-            Log.Debug("Antigrav verbs skipped: canAccess={Access} canInteract={Interact} ent={Ent}",
-                args.CanAccess, args.CanInteract, ToPrettyString(ent));
             return;
-        }
 
         var user = args.User;
         args.Verbs.Add(new AlternativeVerb
@@ -97,10 +98,7 @@ public sealed class SubGridAntigravSystem : EntitySystem
     {
         var list = ent.Comp.ModeCycle;
         if (list.Count == 0)
-        {
-            Log.Warning("Antigrav mode cycle empty: {Ent}", ToPrettyString(ent));
             return;
-        }
 
         var old = ent.Comp.Mode;
         var idx = list.IndexOf(ent.Comp.Mode);
@@ -120,6 +118,21 @@ public sealed class SubGridAntigravSystem : EntitySystem
 
     public void SetEnabled(Entity<SubGridAntigravComponent> ent, bool enabled, EntityUid? user = null)
     {
+        if (enabled && IsHostMovingUnderAntigrav(ent, out var hostSpd, out var hostAng))
+        {
+            Log.Info("Antigrav unlock blocked (host moving): {Ent} hostSpd={Spd:F2} hostAng={Ang:F3}",
+                ToPrettyString(ent), hostSpd, hostAng);
+            if (user != null)
+            {
+                _popup.PopupEntity(
+                    Loc.GetString("subgrid-antigrav-host-moving-block"),
+                    ent,
+                    user.Value);
+            }
+
+            return;
+        }
+
         if (ent.Comp.Enabled == enabled)
         {
             Log.Debug("Antigrav SetEnabled no-op (already {Enabled}): {Ent}", enabled, ToPrettyString(ent));
@@ -140,6 +153,97 @@ public sealed class SubGridAntigravSystem : EntitySystem
                 ent,
                 user.Value);
         }
+    }
+
+    /// <summary>
+    /// Force park when the mother grid is moving. No-op if already parked.
+    /// </summary>
+    public bool TryForceParkForHostMotion(EntityUid subGridUid, SubGridComponent sub)
+    {
+        if (!sub.DriveEnabled)
+            return false;
+
+        if (sub.HostGrid is not { } host || Deleted(host) || !IsGridMoving(host, out var spd, out var ang))
+            return false;
+
+        if (!TryFindAntigrav(subGridUid, out var antigrav))
+        {
+            sub.DriveEnabled = false;
+            Dirty(subGridUid, sub);
+            if (TryComp(subGridUid, out ShuttleComponent? shuttle))
+            {
+                shuttle.Enabled = false;
+                if (TryComp(subGridUid, out PhysicsComponent? body))
+                {
+                    _physics.SetBodyType(subGridUid, BodyType.Kinematic, body: body);
+                    _physics.SetLinearVelocity(subGridUid, Vector2.Zero, body: body);
+                    _physics.SetAngularVelocity(subGridUid, 0f, body: body);
+                    _physics.SetFixedRotation(subGridUid, true, body: body);
+                }
+            }
+
+            _hostFollow.RecaptureHostPose(subGridUid, sub);
+            return true;
+        }
+
+        Log.Info("Antigrav force-park (host moving): {Grid} hostSpd={Spd:F2} hostAng={Ang:F3}",
+            ToPrettyString(subGridUid), spd, ang);
+
+        antigrav.Comp.Enabled = false;
+        Dirty(antigrav);
+        SyncToGrid(antigrav);
+
+        _popup.PopupCoordinates(
+            Loc.GetString("subgrid-antigrav-host-moving-forced"),
+            Transform(subGridUid).Coordinates);
+
+        return true;
+    }
+
+    public bool IsHostMovingUnderAntigrav(Entity<SubGridAntigravComponent> ent, out float speed, out float angVel)
+    {
+        speed = 0f;
+        angVel = 0f;
+        var gridUid = Transform(ent).GridUid;
+        if (gridUid == null || !TryComp(gridUid.Value, out SubGridComponent? sub))
+            return false;
+        if (sub.HostGrid is not { } host || Deleted(host))
+            return false;
+        return IsGridMoving(host, out speed, out angVel);
+    }
+
+    public static bool IsGridMoving(PhysicsComponent body, float epsilon = HostStillEpsilon)
+    {
+        return body.LinearVelocity.LengthSquared() > epsilon * epsilon
+               || MathF.Abs(body.AngularVelocity) > epsilon;
+    }
+
+    public bool IsGridMoving(EntityUid grid, out float speed, out float angVel, float epsilon = HostStillEpsilon)
+    {
+        speed = 0f;
+        angVel = 0f;
+        if (!TryComp(grid, out PhysicsComponent? body))
+            return false;
+
+        speed = body.LinearVelocity.Length();
+        angVel = body.AngularVelocity;
+        return IsGridMoving(body, epsilon);
+    }
+
+    public bool TryFindAntigrav(EntityUid subGridUid, out Entity<SubGridAntigravComponent> antigrav)
+    {
+        var query = EntityQueryEnumerator<SubGridAntigravComponent, TransformComponent>();
+        while (query.MoveNext(out var uid, out var comp, out var xform))
+        {
+            if (xform.GridUid != subGridUid)
+                continue;
+
+            antigrav = (uid, comp);
+            return true;
+        }
+
+        antigrav = default;
+        return false;
     }
 
     public void SyncToGrid(Entity<SubGridAntigravComponent> ent)
@@ -176,28 +280,22 @@ public sealed class SubGridAntigravSystem : EntitySystem
         }
         else
         {
-            // Kinematic (not Static): still collides with Static walls, but walking mobs
-            // cannot shove the pad around (Dynamic + overlapping station felt like ice/stuck).
             shuttle.Enabled = false;
             if (TryComp(gridUid, out PhysicsComponent? body))
             {
                 _physics.SetBodyType(gridUid, BodyType.Kinematic, body: body);
-                _physics.SetLinearVelocity(gridUid, System.Numerics.Vector2.Zero, body: body);
+                _physics.SetLinearVelocity(gridUid, Vector2.Zero, body: body);
                 _physics.SetAngularVelocity(gridUid, 0f, body: body);
                 _physics.SetFixedRotation(gridUid, true, body: body);
             }
 
-            Log.Debug("Antigrav drive-off set Kinematic (stable walk + wall collide) on {Grid}", ToPrettyString(gridUid));
+            Log.Debug("Antigrav drive-off set Kinematic on {Grid}", ToPrettyString(gridUid));
         }
 
         Log.Info("Antigrav SyncToGrid done: antigrav={Ent} grid={Grid} drive={Drive} mode={Mode}",
             ToPrettyString(ent), ToPrettyString(gridUid), ent.Comp.Enabled, ent.Comp.Mode);
         _movement.ApplyMode(gridUid, ent.Comp.Mode, ent.Comp.Enabled);
-
-        // Refresh bumper contacts after body-type / damping changes.
         _subGrids.RebuildBumper((gridUid, sub));
-
-        // Recapture host-local pose after park/drive transitions so we ride the host cleanly.
         _hostFollow.RecaptureHostPose(gridUid, sub);
     }
 }

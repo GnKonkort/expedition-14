@@ -34,14 +34,13 @@ public sealed class SubGridMovementSystem : EntitySystem
     [Dependency] private readonly TagSystem _tags = default!;
     [Dependency] private readonly IGameTiming _timing = default!;
     [Dependency] private readonly EntityLookupSystem _lookup = default!;
-    [Dependency] private readonly SubGridDebugLog _dbg = default!;
+    [Dependency] private readonly SubGridHostFollowSystem _hostFollow = default!;
 
     private static readonly ProtoId<TagPrototype> WallTag = "Wall";
     private static readonly ProtoId<TagPrototype> WindowTag = "Window";
 
     private const float CarCrushSpeed = 8f;
     private const float TracksCrushSpeed = 1.5f;
-    private static readonly TimeSpan MoveLogInterval = TimeSpan.FromMilliseconds(250);
     private const int WallResolvePasses = 3;
     private const float MaxSeparation = 1f;
 
@@ -50,7 +49,6 @@ public sealed class SubGridMovementSystem : EntitySystem
     private readonly List<Box2> _floorBoxes = new();
     private TimeSpan _nextWallLog;
     private int _wallHitsSinceLog;
-    private TimeSpan _nextDriveStateLog;
     private EntityQuery<MapGridComponent> _gridQuery;
     private EntityQuery<FixturesComponent> _fixturesQuery;
 
@@ -61,7 +59,7 @@ public sealed class SubGridMovementSystem : EntitySystem
         _fixturesQuery = GetEntityQuery<FixturesComponent>();
         SubscribeLocalEvent<SubGridComponent, TileFrictionEvent>(OnTileFriction);
         SubscribeLocalEvent<SubGridComponent, StartCollideEvent>(OnStartCollide);
-        Log.Info("SubGridMovementSystem initialized (move debug -> {Path})", _dbg.Path);
+        Log.Info("SubGridMovementSystem initialized");
     }
 
     public override void Update(float frameTime)
@@ -78,11 +76,6 @@ public sealed class SubGridMovementSystem : EntitySystem
                     // Host follow owns velocity while parked on a moving grid — don't zero it.
                     if (sub.HostGrid == null)
                     {
-                        _dbg.WriteThrottle(
-                            $"park.vel:{uid}",
-                            MoveLogInterval,
-                            "drive.park",
-                            $"zeroing residual vel grid={ToPrettyString(uid)} vel={body.LinearVelocity} ang={body.AngularVelocity:F3} body={body.BodyType}");
                         _physics.SetLinearVelocity(uid, Vector2.Zero, body: body);
                         _physics.SetAngularVelocity(uid, 0f, body: body);
                     }
@@ -91,15 +84,6 @@ public sealed class SubGridMovementSystem : EntitySystem
                 // Still resolve walls while parked so a moving host cannot leave us embedded.
                 ResolveWallBlocks(uid, sub, body, xform, grid);
                 continue;
-            }
-
-            if (_timing.CurTime >= _nextDriveStateLog)
-            {
-                _nextDriveStateLog = _timing.CurTime + TimeSpan.FromSeconds(0.5);
-                var pos = _transform.GetWorldPosition(xform);
-                _dbg.Write(
-                    "drive.state",
-                    $"grid={ToPrettyString(uid)} mode={sub.Mode} body={body.BodyType} pos={pos} vel={body.LinearVelocity} speed={body.LinearVelocity.Length():F2} ang={body.AngularVelocity:F3} mass={body.FixturesMass:F1} damp={body.LinearDamping:F2}");
             }
 
             switch (sub.Mode)
@@ -176,8 +160,6 @@ public sealed class SubGridMovementSystem : EntitySystem
         }
         Log.Info("ApplyMode {Mode} on {Grid}: bodyModifier={Mod} fixedRot={Fixed} linDamp={Damp}",
             mode, ToPrettyString(gridUid), shuttle.BodyModifier, fixedRot, body.LinearDamping);
-        _dbg.Write("drive.mode",
-            $"ApplyMode grid={ToPrettyString(gridUid)} mode={mode} enabled={enabled} body={body.BodyType} bodyMod={shuttle.BodyModifier} linDamp={body.LinearDamping:F2} fixedRot={fixedRot}");
     }
 
     /// <summary>
@@ -313,11 +295,6 @@ public sealed class SubGridMovementSystem : EntitySystem
             return;
 
         _wallHitsSinceLog++;
-        _dbg.WriteThrottle(
-            $"wall.resolve:{uid}",
-            MoveLogInterval,
-            "drive.wall",
-            $"resolve grid={ToPrettyString(uid)} mode={sub.Mode} sep={totalSeparation} speed={body.LinearVelocity.Length():F2} vel={body.LinearVelocity} body={body.BodyType}");
 
         if (_timing.CurTime < _nextWallLog)
             return;
@@ -389,10 +366,21 @@ public sealed class SubGridMovementSystem : EntitySystem
         var (subPos, subRot) = _transform.GetWorldPositionRotation(uid);
         sub.HostLocalPosition = (-hostRot).RotateVec(subPos - hostPos);
         sub.HostLocalRotation = subRot - hostRot;
+        Dirty(uid, sub);
+        _hostFollow.RefreshHostWeldAnchors(uid, sub);
     }
 
     private void OnTileFriction(Entity<SubGridComponent> ent, ref TileFrictionEvent args)
     {
+        // Host ride owns world velocity (host + relative). World-space tile friction
+        // would bleed off the host component and leave the pad glued to the map.
+        // Relative damping is applied in SubGridHostFollowSystem instead.
+        if (ent.Comp.HostGrid != null)
+        {
+            args.Modifier = 0f;
+            return;
+        }
+
         if (!ent.Comp.DriveEnabled)
             return;
 
@@ -424,10 +412,6 @@ public sealed class SubGridMovementSystem : EntitySystem
             var otherLayer = args.OtherFixture.CollisionLayer;
             var hitsImpassable = (otherLayer & (int) CollisionGroup.Impassable) != 0
                                 || (otherLayer & (int) CollisionGroup.HighImpassable) != 0;
-
-            _dbg.Write(
-                "hull.collide+",
-                $"grid={ToPrettyString(ent)} fix={args.OurFixtureId} other={ToPrettyString(args.OtherEntity)} otherFix={args.OtherFixtureId} impassable={hitsImpassable} speed={args.OurBody.LinearVelocity.Length():F2} drive={ent.Comp.DriveEnabled} body={args.OurBody.BodyType}");
 
             Log.Debug(
                 "SubGrid hard collide: {Grid} fixture={Fix} vs {Other} otherFix={OtherFix} impassable={Imp} speed={Speed:F2} drive={Drive} ourBody={Body}",
