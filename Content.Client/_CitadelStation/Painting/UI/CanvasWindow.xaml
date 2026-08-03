@@ -1,0 +1,74 @@
+<DefaultWindow xmlns="https://spacestation14.io"
+               xmlns:ui="clr-namespace:Content.Client._CitadelStation.Painting.UI"
+               Title="{Loc 'canvas-window-title'}"
+               MinSize="900 700"
+               SetSize="960 740">
+    <BoxContainer Orientation="Horizontal" SeparationOverride="8">
+        <BoxContainer Orientation="Vertical" SeparationOverride="4">
+            <ui:CanvasDrawControl Name="DrawArea" Access="Public" />
+            <Label Name="StatusLabel" />
+        </BoxContainer>
+
+        <ScrollContainer MinWidth="280" HorizontalExpand="True" VerticalExpand="True">
+            <BoxContainer Orientation="Vertical" SeparationOverride="4" MinWidth="260">
+                <Label Text="{Loc 'canvas-tools-label'}" StyleClasses="LabelHeading" />
+                <BoxContainer Orientation="Horizontal" SeparationOverride="4">
+                    <Button Name="BrushButton" Text="{Loc 'canvas-tool-brush'}" ToggleMode="True" Pressed="True" />
+                    <Button Name="EraserButton" Text="{Loc 'canvas-tool-eraser'}" ToggleMode="True" />
+                    <Button Name="FillButton" Text="{Loc 'canvas-tool-fill'}" ToggleMode="True" />
+                    <Button Name="EyedropperButton" Text="{Loc 'canvas-tool-eyedropper'}" ToggleMode="True" />
+                </BoxContainer>
+
+                <Label Text="{Loc 'canvas-brush-size-label'}" />
+                <BoxContainer Orientation="Horizontal" SeparationOverride="4">
+                    <Slider Name="BrushSizeSlider" MinValue="1" MaxValue="60" Value="1" HorizontalExpand="True" />
+                    <LineEdit Name="BrushSizeEdit" Text="1" MinWidth="48" MaxWidth="56" />
+                </BoxContainer>
+
+                <Label Text="{Loc 'canvas-palette-label'}" />
+                <GridContainer Name="PaletteGrid" Columns="8" />
+                <ColorSelectorSliders Name="ColorPicker" IsAlphaVisible="True" />
+
+                <PanelContainer StyleClasses="HighDivider" />
+
+                <Label Text="{Loc 'canvas-resolution-label'}" StyleClasses="LabelHeading" />
+                <BoxContainer Orientation="Horizontal" SeparationOverride="4">
+                    <Button Name="Res64Button" Text="64" ToggleMode="True" Pressed="True" MinWidth="48" />
+                    <Button Name="Res128Button" Text="128" ToggleMode="True" MinWidth="48" />
+                    <Button Name="Res256Button" Text="256" ToggleMode="True" MinWidth="48" />
+                </BoxContainer>
+
+                <PanelContainer StyleClasses="HighDivider" />
+
+                <Label Text="{Loc 'canvas-layers-label'}" StyleClasses="LabelHeading" />
+                <OptionButton Name="LayerOption" HorizontalExpand="True" />
+                <BoxContainer Orientation="Horizontal" SeparationOverride="4">
+                    <Button Name="AddLayerButton" Text="{Loc 'canvas-layer-add'}" />
+                    <Button Name="RemoveLayerButton" Text="{Loc 'canvas-layer-remove'}" />
+                </BoxContainer>
+                <CheckBox Name="LayerVisibleCheck" Text="{Loc 'canvas-layer-visible'}" />
+                <Label Text="{Loc 'canvas-layer-opacity-label'}" />
+                <Slider Name="LayerOpacitySlider" MinValue="0" MaxValue="1" Value="1" HorizontalExpand="True" />
+
+                <PanelContainer StyleClasses="HighDivider" />
+
+                <Label Text="{Loc 'canvas-frame-label'}" StyleClasses="LabelHeading" />
+                <OptionButton Name="FrameOption" HorizontalExpand="True" />
+                <Button Name="ApplyFrameButton" Text="{Loc 'canvas-apply-frame'}" />
+
+                <Label Text="{Loc 'canvas-title-label'}" />
+                <LineEdit Name="TitleEdit" HorizontalExpand="True" />
+                <Button Name="ApplyTitleButton" Text="{Loc 'canvas-apply-title'}" />
+
+                <PanelContainer StyleClasses="HighDivider" />
+
+                <Label Text="{Loc 'canvas-lock-label'}" StyleClasses="LabelHeading" />
+                <CheckBox Name="SignCheck" Text="{Loc 'canvas-lock-sign'}" />
+                <Button Name="LockButton" Text="{Loc 'canvas-lock-confirm'}" StyleClasses="Caution" />
+
+                <Button Name="SaveButton" Text="{Loc 'canvas-save'}" />
+                <Label Name="SignatureLabel" />
+            </BoxContainer>
+        </ScrollContainer>
+    </BoxContainer>
+</DefaultWindow>

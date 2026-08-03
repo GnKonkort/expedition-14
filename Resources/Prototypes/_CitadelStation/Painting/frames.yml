@@ -1,0 +1,20 @@
+- type: paintingFrame
+  id: PaintingFrameWood
+  name: canvas-frame-wood
+  sprite:
+    sprite: _CitadelStation/Structures/Wallmounts/painting_frames.rsi
+    state: wood
+
+- type: paintingFrame
+  id: PaintingFrameMetal
+  name: canvas-frame-metal
+  sprite:
+    sprite: _CitadelStation/Structures/Wallmounts/painting_frames.rsi
+    state: metal
+
+- type: paintingFrame
+  id: PaintingFrameOrnate
+  name: canvas-frame-ornate
+  sprite:
+    sprite: _CitadelStation/Structures/Wallmounts/painting_frames.rsi
+    state: ornate

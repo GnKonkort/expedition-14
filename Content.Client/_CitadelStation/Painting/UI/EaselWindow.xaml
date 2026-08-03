@@ -1,0 +1,15 @@
+<DefaultWindow xmlns="https://spacestation14.io"
+               Title="{Loc 'easel-window-title'}"
+               MinSize="360 320"
+               SetSize="400 360">
+    <BoxContainer Orientation="Vertical" SeparationOverride="6">
+        <Label Text="{Loc 'easel-slots-label'}" StyleClasses="LabelHeading" />
+        <ItemList Name="SlotList" VerticalExpand="True" SelectMode="Single" />
+        <BoxContainer Orientation="Horizontal" SeparationOverride="4">
+            <Button Name="SelectButton" Text="{Loc 'easel-select'}" HorizontalExpand="True" />
+            <Button Name="EditButton" Text="{Loc 'easel-edit'}" HorizontalExpand="True" />
+            <Button Name="EjectButton" Text="{Loc 'easel-eject'}" HorizontalExpand="True" />
+        </BoxContainer>
+        <Label Name="InfoLabel" />
+    </BoxContainer>
+</DefaultWindow>

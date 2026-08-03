@@ -1,0 +1,122 @@
+- type: entity
+  parent: BaseItem
+  id: ArtistCanvas
+  name: canvas
+  description: A blank canvas waiting for an artist. Use it in hand to paint.
+  components:
+  - type: Sprite
+    sprite: _CitadelStation/Objects/Misc/canvas.rsi
+    layers:
+    # Artwork under frame so the border stays visible.
+    - state: canvas
+      map: [ "enum.CanvasVisualLayers.Artwork" ]
+      visible: true
+    - state: canvas
+      map: [ "enum.CanvasVisualLayers.Frame" ]
+  - type: Item
+    size: Normal
+  - type: Appearance
+  - type: Canvas
+  - type: Tag
+    tags:
+    - ArtistCanvas
+  - type: ActivatableUI
+    key: enum.CanvasUiKey.Key
+    inHandsOnly: true
+    requireActiveHand: false
+    requiresComplex: false
+  - type: UserInterface
+    interfaces:
+      enum.CanvasUiKey.Key:
+        type: CanvasBoundUserInterface
+  - type: StaticPrice
+    price: 50
+  - type: Damageable
+    damageContainer: Inorganic
+    damageModifierSet: Wood
+  - type: Destructible
+    thresholds:
+    - trigger:
+        !type:DamageTrigger
+        damage: 40
+      behaviors:
+      - !type:DoActsBehavior
+        acts: [ "Destruction" ]
+    - trigger:
+        !type:DamageTrigger
+        damage: 15
+      behaviors:
+      - !type:PlaySoundBehavior
+        sound:
+          path: /Audio/Effects/poster_broken.ogg
+      - !type:SpawnEntitiesBehavior
+        spawn:
+          ArtistCanvasBroken:
+            min: 1
+            max: 1
+      - !type:DoActsBehavior
+        acts: [ "Destruction" ]
+
+- type: entity
+  parent: BaseSign
+  id: ArtistPaintingWallmount
+  name: painting
+  description: A framed painting hanging on the wall. Interact to take it down.
+  components:
+  - type: Sprite
+    sprite: _CitadelStation/Structures/Wallmounts/painting_frames.rsi
+    snapCardinals: true
+    layers:
+    - state: artwork_blank
+      map: [ "enum.CanvasVisualLayers.Artwork" ]
+    - state: wood
+      map: [ "enum.CanvasVisualLayers.Frame" ]
+  - type: Canvas
+    mounted: true
+  - type: Appearance
+  - type: Destructible
+    thresholds:
+    - trigger:
+        !type:DamageTrigger
+        damage: 50
+      behaviors:
+      - !type:PlaySoundBehavior
+        sound:
+          path: /Audio/Effects/poster_broken.ogg
+      - !type:DoActsBehavior
+        acts: [ "Destruction" ]
+    - trigger:
+        !type:DamageTrigger
+        damage: 5
+      behaviors:
+      - !type:PlaySoundBehavior
+        sound:
+          path: /Audio/Effects/poster_broken.ogg
+      - !type:SpawnEntitiesBehavior
+        spawn:
+          ArtistCanvasBroken:
+            min: 1
+            max: 1
+        offset: 0
+      - !type:DoActsBehavior
+        acts: [ "Destruction" ]
+  - type: StaticPrice
+    price: 100
+
+- type: entity
+  parent: BaseItem
+  id: ArtistCanvasBroken
+  name: broken painting
+  description: The remains of a ruined painting. The art is lost.
+  components:
+  - type: Sprite
+    sprite: _CitadelStation/Objects/Misc/canvas.rsi
+    state: broken
+  - type: Item
+    size: Small
+  - type: Tag
+    tags:
+    - Trash
+  - type: SpaceGarbage
+  - type: StaticPrice
+    price: 5

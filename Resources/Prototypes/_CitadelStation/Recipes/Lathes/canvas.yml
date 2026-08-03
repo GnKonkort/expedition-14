@@ -1,0 +1,15 @@
+- type: latheRecipe
+  id: ArtistCanvas
+  result: ArtistCanvas
+  completetime: 2
+  materials:
+    Cloth: 200
+    Wood: 100
+
+- type: latheRecipe
+  id: ArtistEasel
+  result: ArtistEasel
+  completetime: 4
+  materials:
+    Wood: 500
+    Cloth: 100

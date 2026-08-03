@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "license": "CLA",
+  "copyright": "CitadelStation - generated placeholder painting frames",
+  "size": {
+    "x": 32,
+    "y": 32
+  },
+  "states": [
+    {
+      "name": "wood"
+    },
+    {
+      "name": "metal"
+    },
+    {
+      "name": "ornate"
+    },
+    {
+      "name": "artwork_blank"
+    }
+  ]
+}

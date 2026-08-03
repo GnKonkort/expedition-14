@@ -90,6 +90,8 @@
   - PillCanister
   - ChemistryEmptyBottle01
   - NFClothingNeckCardReporter
+  - ArtistCanvas # Citadel
+  - ArtistEasel # Citadel
 
 - type: latheRecipePack
   id: NFPaperAndPaperAccessories

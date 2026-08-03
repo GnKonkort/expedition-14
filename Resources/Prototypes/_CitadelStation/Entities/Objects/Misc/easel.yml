@@ -1,0 +1,53 @@
+- type: entity
+  parent: BaseItem
+  id: ArtistEasel
+  name: easel
+  description: A wooden easel that can hold up to nine paintings. Insert a canvas, switch between works, and edit the active one.
+  components:
+  - type: Sprite
+    sprite: _CitadelStation/Objects/Misc/easel.rsi
+    layers:
+    - state: easel
+      map: [ "enum.EaselVisualLayers.Base" ]
+    - state: artwork
+      map: [ "enum.EaselVisualLayers.Artwork" ]
+      visible: false
+  - type: Item
+    size: Large
+  - type: Appearance
+  - type: Easel
+  - type: ContainerContainer
+    containers:
+      easel_paintings: !type:Container
+  - type: ActivatableUI
+    key: enum.EaselUiKey.Key
+    requiresComplex: false
+  - type: UserInterface
+    interfaces:
+      enum.EaselUiKey.Key:
+        type: EaselBoundUserInterface
+  - type: StaticPrice
+    price: 150
+  - type: Damageable
+    damageContainer: Inorganic
+    damageModifierSet: Wood
+  - type: Destructible
+    thresholds:
+    - trigger:
+        !type:DamageTrigger
+        damage: 80
+      behaviors:
+      - !type:DoActsBehavior
+        acts: [ "Destruction" ]
+    - trigger:
+        !type:DamageTrigger
+        damage: 40
+      behaviors:
+      - !type:PlaySoundBehavior
+        sound:
+          collection: WoodDestroy
+      - !type:DoActsBehavior
+        acts: [ "Destruction" ]
+  - type: Anchorable
+  - type: Transform
+    noRot: true
