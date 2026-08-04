@@ -4,8 +4,15 @@
                MinSize="900 700"
                SetSize="960 740">
     <BoxContainer Orientation="Horizontal" SeparationOverride="8">
-        <BoxContainer Orientation="Vertical" SeparationOverride="4">
-            <ui:CanvasDrawControl Name="DrawArea" Access="Public" />
+        <BoxContainer Orientation="Vertical" SeparationOverride="4" HorizontalExpand="True" VerticalExpand="True">
+            <BoxContainer Orientation="Horizontal" SeparationOverride="6">
+                <Label Text="{Loc 'canvas-zoom-label'}" />
+                <Slider Name="ZoomSlider" MinValue="0.25" MaxValue="2" Value="1" HorizontalExpand="True" />
+                <Label Name="ZoomValueLabel" Text="100%" MinWidth="48" />
+            </BoxContainer>
+            <ScrollContainer HorizontalExpand="True" VerticalExpand="True" MinWidth="280" MinHeight="280">
+                <ui:CanvasDrawControl Name="DrawArea" Access="Public" />
+            </ScrollContainer>
             <Label Name="StatusLabel" />
         </BoxContainer>
 

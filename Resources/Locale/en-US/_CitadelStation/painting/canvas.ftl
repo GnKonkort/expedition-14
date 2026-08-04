@@ -1,4 +1,5 @@
 canvas-window-title = Painting Studio
+canvas-zoom-label = Zoom
 canvas-tools-label = Tools
 canvas-tool-brush = Brush
 canvas-tool-eraser = Eraser

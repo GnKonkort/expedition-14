@@ -9,6 +9,7 @@
   - ClothingOuterEVASuitEngineer
   - ClothingOuterEVASuitAtmosTech
   - NFFlash
+  - ElectronicSignboard # Citadel
 
 - type: latheRecipePack
   id: NFEngineeringStructureBoardsStatic

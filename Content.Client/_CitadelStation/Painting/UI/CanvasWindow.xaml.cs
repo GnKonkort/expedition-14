@@ -43,6 +43,14 @@ public sealed partial class CanvasWindow : DefaultWindow
         FillButton.OnPressed += _ => SetTool(CanvasTool.Fill);
         EyedropperButton.OnPressed += _ => SetTool(CanvasTool.Eyedropper);
 
+        ZoomSlider.OnValueChanged += args =>
+        {
+            DrawArea.SetZoom(args.Value);
+            ZoomValueLabel.Text = $"{(int)MathF.Round(args.Value * 100)}%";
+        };
+        DrawArea.SetZoom(ZoomSlider.Value);
+        ZoomValueLabel.Text = $"{(int)MathF.Round(ZoomSlider.Value * 100)}%";
+
         BrushSizeSlider.OnValueChanged += args =>
         {
             if (_updatingUi)

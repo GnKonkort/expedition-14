@@ -32,6 +32,9 @@ public sealed class CanvasDrawControl : Control
     public CanvasTool Tool { get; set; } = CanvasTool.Brush;
     public bool ReadOnly { get; set; }
 
+    /// <summary>1 = EditorDisplaySize; clamp externally via SetZoom.</summary>
+    public float Zoom { get; private set; } = 1f;
+
     public event Action? PixelsModified;
     public event Action<Color>? ColorPicked;
 
@@ -39,14 +42,28 @@ public sealed class CanvasDrawControl : Control
     public int ActiveLayer => _activeLayer;
     public int LayerCount => _layers.Count;
 
-    private float CellSize => CanvasComponent.EditorDisplaySize / (float)_size;
+    private float DisplayPx => CanvasComponent.EditorDisplaySize * Zoom;
+    private float CellSize => DisplayPx / (float)_size;
 
     public CanvasDrawControl()
     {
-        MinSize = new Vector2(CanvasComponent.EditorDisplaySize, CanvasComponent.EditorDisplaySize);
-        MaxSize = MinSize;
+        ApplyDisplaySize();
         MouseFilter = MouseFilterMode.Stop;
         EnsureDefaultLayer();
+    }
+
+    public void SetZoom(float zoom)
+    {
+        Zoom = Math.Clamp(zoom, 0.25f, 2f);
+        ApplyDisplaySize();
+    }
+
+    private void ApplyDisplaySize()
+    {
+        var s = new Vector2(DisplayPx, DisplayPx);
+        MinSize = s;
+        MaxSize = s;
+        SetSize = s;
     }
 
     public void LoadFromState(int size, List<CanvasLayerData> layers, int activeLayer)
@@ -67,8 +84,7 @@ public sealed class CanvasDrawControl : Control
             EnsureDefaultLayer();
 
         _activeLayer = Math.Clamp(activeLayer, 0, _layers.Count - 1);
-        MinSize = new Vector2(CanvasComponent.EditorDisplaySize, CanvasComponent.EditorDisplaySize);
-        MaxSize = MinSize;
+        ApplyDisplaySize();
     }
 
     public List<CanvasLayerData> ExportLayers()
@@ -162,7 +178,7 @@ public sealed class CanvasDrawControl : Control
     protected override void Draw(DrawingHandleScreen handle)
     {
         var cell = CellSize;
-        var display = CanvasComponent.EditorDisplaySize;
+        var display = DisplayPx;
 
         // Checkerboard for transparency
         const int check = 8;

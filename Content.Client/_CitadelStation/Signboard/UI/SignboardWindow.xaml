@@ -1,0 +1,92 @@
+<DefaultWindow xmlns="https://spacestation14.io"
+               xmlns:ui="clr-namespace:Content.Client._CitadelStation.Signboard.UI"
+               Title="{Loc 'signboard-window-title'}"
+               MinSize="980 720"
+               SetSize="1040 780">
+    <BoxContainer Orientation="Horizontal" SeparationOverride="8">
+        <BoxContainer Orientation="Vertical" SeparationOverride="4" HorizontalExpand="True" VerticalExpand="True">
+            <BoxContainer Orientation="Horizontal" SeparationOverride="6">
+                <Label Text="{Loc 'signboard-zoom-label'}" />
+                <Slider Name="ZoomSlider" MinValue="0.25" MaxValue="2" Value="1" HorizontalExpand="True" />
+                <Label Name="ZoomValueLabel" Text="100%" MinWidth="48" />
+            </BoxContainer>
+            <ScrollContainer MinWidth="400" HorizontalExpand="True" VerticalExpand="True">
+                <BoxContainer Orientation="Vertical" SeparationOverride="4">
+                    <ui:SignboardDrawControl Name="DrawArea" Access="Public" />
+                    <Label Name="StatusLabel" />
+                </BoxContainer>
+            </ScrollContainer>
+        </BoxContainer>
+
+        <ScrollContainer MinWidth="300" HorizontalExpand="True" VerticalExpand="True">
+            <BoxContainer Orientation="Vertical" SeparationOverride="4" MinWidth="280">
+                <Label Text="{Loc 'signboard-tools-label'}" StyleClasses="LabelHeading" />
+                <BoxContainer Orientation="Horizontal" SeparationOverride="4">
+                    <Button Name="BrushButton" Text="{Loc 'signboard-tool-brush'}" ToggleMode="True" Pressed="True" />
+                    <Button Name="EraserButton" Text="{Loc 'signboard-tool-eraser'}" ToggleMode="True" />
+                    <Button Name="FillButton" Text="{Loc 'signboard-tool-fill'}" ToggleMode="True" />
+                    <Button Name="EyedropperButton" Text="{Loc 'signboard-tool-eyedropper'}" ToggleMode="True" />
+                </BoxContainer>
+
+                <Label Text="{Loc 'signboard-brush-size-label'}" />
+                <BoxContainer Orientation="Horizontal" SeparationOverride="4">
+                    <Slider Name="BrushSizeSlider" MinValue="1" MaxValue="60" Value="1" HorizontalExpand="True" />
+                    <LineEdit Name="BrushSizeEdit" Text="1" MinWidth="48" MaxWidth="56" />
+                </BoxContainer>
+
+                <Label Text="{Loc 'signboard-palette-label'}" />
+                <GridContainer Name="PaletteGrid" Columns="8" />
+                <ColorSelectorSliders Name="ColorPicker" IsAlphaVisible="True" />
+
+                <PanelContainer StyleClasses="HighDivider" />
+
+                <Label Text="{Loc 'signboard-resolution-label'}" StyleClasses="LabelHeading" />
+                <BoxContainer Orientation="Horizontal" SeparationOverride="4">
+                    <Button Name="Res64Button" Text="64" ToggleMode="True" Pressed="True" MinWidth="48" />
+                    <Button Name="Res128Button" Text="128" ToggleMode="True" MinWidth="48" />
+                    <Button Name="Res256Button" Text="256" ToggleMode="True" MinWidth="48" />
+                </BoxContainer>
+
+                <PanelContainer StyleClasses="HighDivider" />
+
+                <Label Text="{Loc 'signboard-frames-label'}" StyleClasses="LabelHeading" />
+                <OptionButton Name="FrameOption" HorizontalExpand="True" />
+                <BoxContainer Orientation="Horizontal" SeparationOverride="4">
+                    <Button Name="AddFrameButton" Text="{Loc 'signboard-frame-add'}" />
+                    <Button Name="RemoveFrameButton" Text="{Loc 'signboard-frame-remove'}" />
+                </BoxContainer>
+                <Button Name="CopyPrevButton" Text="{Loc 'signboard-frame-copy'}" />
+                <CheckBox Name="OnionCheck" Text="{Loc 'signboard-onion-skin'}" Pressed="True" />
+
+                <Label Text="{Loc 'signboard-delay-label'}" />
+                <Slider Name="DelaySlider" MinValue="0.05" MaxValue="5" Value="0.5" HorizontalExpand="True" />
+                <Label Name="DelayValueLabel" />
+
+                <CheckBox Name="NeonCheck" Text="{Loc 'signboard-neon'}" Pressed="True" />
+                <CheckBox Name="PlayingCheck" Text="{Loc 'signboard-playing'}" Pressed="True" />
+                <CheckBox Name="PoweredCheck" Text="{Loc 'signboard-powered'}" Pressed="True" />
+
+                <PanelContainer StyleClasses="HighDivider" />
+
+                <Label Text="{Loc 'signboard-style-label'}" StyleClasses="LabelHeading" />
+                <OptionButton Name="StyleOption" HorizontalExpand="True" />
+                <Button Name="ApplyStyleButton" Text="{Loc 'signboard-apply-style'}" />
+
+                <PanelContainer StyleClasses="HighDivider" />
+
+                <Label Text="{Loc 'signboard-text-label'}" StyleClasses="LabelHeading" />
+                <LineEdit Name="TextEdit" HorizontalExpand="True" PlaceHolder="{Loc 'signboard-text-placeholder'}" />
+                <OptionButton Name="FontOption" HorizontalExpand="True" />
+                <BoxContainer Orientation="Horizontal" SeparationOverride="4">
+                    <Button Name="FontSize1" Text="S" ToggleMode="True" Pressed="True" MinWidth="40" />
+                    <Button Name="FontSize2" Text="M" ToggleMode="True" MinWidth="40" />
+                    <Button Name="FontSize3" Text="L" ToggleMode="True" MinWidth="40" />
+                </BoxContainer>
+                <Button Name="StampTextButton" Text="{Loc 'signboard-text-stamp'}" ToggleMode="True" />
+                <Label Name="TextPlaceHint" Text="{Loc 'signboard-text-place-hint'}" />
+
+                <Button Name="SaveButton" Text="{Loc 'signboard-save'}" />
+            </BoxContainer>
+        </ScrollContainer>
+    </BoxContainer>
+</DefaultWindow>

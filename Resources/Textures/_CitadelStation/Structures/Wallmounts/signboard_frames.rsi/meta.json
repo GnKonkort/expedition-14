@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "license": "CLA",
+  "copyright": "CitadelStation signboard frames",
+  "size": {
+    "x": 32,
+    "y": 32
+  },
+  "states": [
+    {
+      "name": "solo"
+    },
+    {
+      "name": "left"
+    },
+    {
+      "name": "mid"
+    },
+    {
+      "name": "right"
+    },
+    {
+      "name": "top"
+    },
+    {
+      "name": "bottom"
+    },
+    {
+      "name": "vmid"
+    },
+    {
+      "name": "nw"
+    },
+    {
+      "name": "ne"
+    },
+    {
+      "name": "sw"
+    },
+    {
+      "name": "se"
+    },
+    {
+      "name": "n"
+    },
+    {
+      "name": "s"
+    },
+    {
+      "name": "e"
+    },
+    {
+      "name": "w"
+    },
+    {
+      "name": "center"
+    }
+  ]
+}

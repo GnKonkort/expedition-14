@@ -1,0 +1,8 @@
+- type: latheRecipe
+  id: ElectronicSignboard
+  result: ElectronicSignboard
+  completetime: 5
+  materials:
+    Steel: 500
+    Glass: 300
+    Plastic: 200

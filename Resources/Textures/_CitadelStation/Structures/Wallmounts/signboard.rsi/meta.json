@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "license": "CLA",
+  "copyright": "StarHorizon signboard placeholders",
+  "size": {
+    "x": 32,
+    "y": 32
+  },
+  "states": [
+    {
+      "name": "screen"
+    },
+    {
+      "name": "solo"
+    }
+  ]
+}

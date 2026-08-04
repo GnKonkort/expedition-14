@@ -48,7 +48,7 @@ public sealed partial class CanvasComponent : Component
     public const float EaselArtworkOffsetY = 4f / 32f;
 
     /// <summary>Editor control edge in UI pixels (always the same).</summary>
-    public const int EditorDisplaySize = 512;
+    public const int EditorDisplaySize = 256;
 
     public const int MaxLayers = 8;
     public const int MaxTitleLength = 64;

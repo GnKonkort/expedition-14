@@ -89,3 +89,6 @@ signal-port-description-logic-memory-input = Signal to load into the memory cell
 
 signal-port-name-logic-enable = Enable
 signal-port-description-logic-enable = Only loads the input signal into the memory cell when HIGH.
+
+signal-port-name-signboard-next-frame = Next Frame
+signal-port-description-signboard-next-frame = Advances the electronic signboard to the next animation frame.

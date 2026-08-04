@@ -1,0 +1,13 @@
+- type: signboardFrame
+  id: SignboardFrameChrome
+  name: signboard-frame-chrome
+  sprite:
+    sprite: _CitadelStation/Structures/Wallmounts/signboard_frames.rsi
+    state: solo
+
+- type: signboardFrame
+  id: SignboardFrameCyan
+  name: signboard-frame-cyan
+  sprite:
+    sprite: _CitadelStation/Structures/Wallmounts/signboard_frames_cyan.rsi
+    state: solo

@@ -1,4 +1,5 @@
 canvas-window-title = Студия живописи
+canvas-zoom-label = Масштаб
 canvas-tools-label = Инструменты
 canvas-tool-brush = Кисть
 canvas-tool-eraser = Ластик

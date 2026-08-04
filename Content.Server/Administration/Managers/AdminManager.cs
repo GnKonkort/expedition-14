@@ -390,7 +390,8 @@ namespace Content.Server.Administration.Managers
 
             _admins.Add(session, reg);
 
-            if (session.ContentData()!.Stealthed)
+            // ContentData can still be null if GameTicker hasn't finished Connected setup (whitelist await).
+            if (session.ContentData() is { Stealthed: true })
                 reg.Data.Stealth = true;
 
             if (reg.Data.Active)

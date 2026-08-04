@@ -50,8 +50,9 @@ namespace Content.Server.GameTicking
                     {
                         var data = new ContentPlayerData(session.UserId, args.Session.Name);
                         data.Mind = mindId;
-                        data.Whitelisted = await _db.GetWhitelistStatusAsync(session.UserId); // Nyanotrasen - Whitelist
+                        // Assign before awaiting DB so InGame/admin login never sees a null ContentData.
                         session.Data.ContentDataUncast = data;
+                        data.Whitelisted = await _db.GetWhitelistStatusAsync(session.UserId); // Nyanotrasen - Whitelist
                     }
 
                     // Make the player actually join the game.
