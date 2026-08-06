@@ -90,7 +90,7 @@ public sealed partial class HumanoidAppearanceComponent : Component
     ///     Which layers of this humanoid that should be hidden on equipping a corresponding item..
     /// </summary>
     [DataField]
-    public HashSet<HumanoidVisualLayers> HideLayersOnEquip = [HumanoidVisualLayers.Hair];
+    public HashSet<HumanoidVisualLayers> HideLayersOnEquip = [HumanoidVisualLayers.Hair, HumanoidVisualLayers.ErpChest, HumanoidVisualLayers.ErpGroin]; // Arcane: ErpChest/ErpGroin
 
     /// <summary>
     ///     Which markings the humanoid defaults to when nudity is toggled off.

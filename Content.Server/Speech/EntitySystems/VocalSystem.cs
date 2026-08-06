@@ -101,7 +101,13 @@ public sealed class VocalSystem : EntitySystem
 
         sex ??= CompOrNull<HumanoidAppearanceComponent>(uid)?.Sex ?? Sex.Unsexed;
 
-        if (!component.Sounds.TryGetValue(sex.Value, out var protoId))
+        // Arcane: Futanari uses female vocal sounds when no dedicated entry exists.
+        if (!component.Sounds.TryGetValue(sex.Value, out var protoId) &&
+            sex == Sex.Futanari &&
+            !component.Sounds.TryGetValue(Sex.Female, out protoId))
+            return;
+
+        if (protoId == default)
             return;
 
         if (!_proto.HasIndex(protoId))

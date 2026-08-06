@@ -1,6 +1,8 @@
 using System.IO;
 using System.Linq;
 using System.Numerics;
+using Content.Client._Arcane.ERP.OrgansAppearance;
+using Content.Client._Arcane.ERP.UI;
 using Content.Client.Humanoid;
 using Content.Client.Lobby.UI.Loadouts;
 using Content.Client.Lobby.UI.Roles;
@@ -9,6 +11,8 @@ using Content.Client.Players.PlayTimeTracking;
 using Content.Client.Sprite;
 using Content.Client.Stylesheets;
 using Content.Client.UserInterface.Systems.Guidebook;
+using Content.Shared._Arcane.ERP;
+using Content.Shared._Arcane.ERP.Preferences;
 using Content.Shared.CCVar;
 using Content.Shared.Clothing;
 using Content.Shared.GameTicking;
@@ -102,6 +106,9 @@ namespace Content.Client.Lobby.UI
         private ColorSelectorSliders _rgbSkinColorSelector;
 
         private bool _isDirty;
+
+        private ErpOrganSection? _erpOrganSection;
+        private bool _erpPenisArousedPreview;
 
         private static readonly ProtoId<GuideEntryPrototype> DefaultSpeciesGuidebook = "Species";
 
@@ -430,6 +437,10 @@ namespace Content.Client.Lobby.UI
 
             #endregion Markings
 
+            // Arcane: ERP organ visuals tab
+            InitErpOrganSection();
+            TabContainer.SetTabTitle(4, Loc.GetString("humanoid-profile-editor-erp-tab"));
+
             RefreshFlavorText();
 
             #region Dummy
@@ -739,6 +750,7 @@ namespace Content.Client.Lobby.UI
             PreviewDummy = _controller.LoadProfileEntity(Profile, JobOverride, ShowClothes.Pressed);
             SpriteView.SetEntity(PreviewDummy);
             _entManager.System<MetaDataSystem>().SetEntityName(PreviewDummy, Profile.Name);
+            RefreshErpOrganPreview();
 
             // Check and set the dirty flag to enable the save/reset buttons as appropriate.
             SetDirty();
@@ -777,6 +789,7 @@ namespace Content.Client.Lobby.UI
             UpdateHairPickers();
             UpdateCMarkingsHair();
             UpdateCMarkingsFacialHair();
+            UpdateErpOrganSection();
 
             RefreshAntags();
             RefreshJobs();
@@ -802,9 +815,59 @@ namespace Content.Client.Lobby.UI
                 return;
 
             _entManager.System<HumanoidAppearanceSystem>().LoadProfile(PreviewDummy, Profile);
+            RefreshErpOrganPreview();
 
             // Check and set the dirty flag to enable the save/reset buttons as appropriate.
             SetDirty();
+        }
+
+        private void InitErpOrganSection()
+        {
+            if (_erpOrganSection != null)
+                return;
+
+            _erpOrganSection = new ErpOrganSection();
+            var erpScroll = new ScrollContainer
+            {
+                VerticalExpand = true,
+                HScrollEnabled = false,
+            };
+            erpScroll.AddChild(_erpOrganSection);
+            ErpTab.AddChild(erpScroll);
+
+            _erpOrganSection.OnPreferencesChanged += prefs =>
+            {
+                if (Profile == null)
+                    return;
+
+                Profile = Profile.WithErpOrgans(prefs);
+                RefreshErpOrganPreview();
+                SetDirty();
+            };
+
+            _erpOrganSection.OnPenisArousedPreviewChanged += aroused =>
+            {
+                _erpPenisArousedPreview = aroused;
+                RefreshErpOrganPreview();
+            };
+        }
+
+        private void UpdateErpOrganSection()
+        {
+            if (_erpOrganSection == null || Profile == null)
+                return;
+
+            _erpOrganSection.Update(Profile.Species, Profile.Sex, Profile.ErpOrgans);
+            _erpOrganSection.SetPenisArousedPreview(_erpPenisArousedPreview);
+        }
+
+        private void RefreshErpOrganPreview()
+        {
+            if (Profile == null || !_entManager.EntityExists(PreviewDummy))
+                return;
+
+            var phase = _erpPenisArousedPreview ? ArousalPhase.Aroused : ArousalPhase.Calm;
+            _entManager.System<ErpOrganVisualsSystem>().RefreshPreview(PreviewDummy, Profile.ErpOrgans, phase);
         }
 
         private void OnSpeciesInfoButtonPressed(BaseButton.ButtonEventArgs args)
@@ -1214,6 +1277,7 @@ namespace Content.Client.Lobby.UI
                     Profile = Profile?.WithGender(Gender.Male);
                     break;
                 case Sex.Female:
+                case Sex.Futanari: // Arcane
                     Profile = Profile?.WithGender(Gender.Female);
                     break;
                 default:
@@ -1223,6 +1287,7 @@ namespace Content.Client.Lobby.UI
 
             UpdateGenderControls();
             Markings.SetSex(newSex);
+            UpdateErpOrganSection();
             ReloadPreview();
         }
 
@@ -1245,6 +1310,7 @@ namespace Content.Client.Lobby.UI
             RefreshTraits(); // Frontier
             UpdateSexControls(); // update sex for new species
             UpdateSpeciesGuidebookIcon();
+            UpdateErpOrganSection();
             ReloadPreview();
         }
 

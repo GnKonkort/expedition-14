@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Content.Server.Administration.Logs;
 using Content.Server.Administration.Managers;
+using Content.Shared._Arcane.ERP.Preferences;
 using Content.Shared.Administration.Logs;
 using Content.Shared.Construction.Prototypes;
 using Content.Shared.Database;
@@ -20,6 +21,7 @@ using Content.Shared.Roles;
 using Content.Shared.Traits;
 using Microsoft.EntityFrameworkCore;
 using Robust.Shared.Enums;
+using Robust.Shared.Maths;
 using Robust.Shared.Network;
 using Robust.Shared.Prototypes;
 using Robust.Shared.Utility;
@@ -223,19 +225,16 @@ namespace Content.Server.Database
             var balance = profile.BankBalance;
 
             // ReSharper disable once ConditionalAccessQualifierIsNonNullableAccordingToAPIContract
-            var markingsRaw = profile.Markings?.Deserialize<List<string>>();
+            ParseMarkingsDocument(profile.Markings, out var markingStrings, out var erpOrgans);
 
             List<Marking> markings = new();
-            if (markingsRaw != null)
+            foreach (var marking in markingStrings)
             {
-                foreach (var marking in markingsRaw)
-                {
-                    var parsed = Marking.ParseFromDbString(marking);
+                var parsed = Marking.ParseFromDbString(marking);
 
-                    if (parsed is null) continue;
+                if (parsed is null) continue;
 
-                    markings.Add(parsed);
-                }
+                markings.Add(parsed);
             }
 
             var loadouts = new Dictionary<string, RoleLoadout>();
@@ -285,7 +284,8 @@ namespace Content.Server.Database
                 (PreferenceUnavailableMode) profile.PreferenceUnavailable,
                 antags.ToHashSet(),
                 traits.ToHashSet(),
-                loadouts
+                loadouts,
+                erpOrgans
             );
         }
 
@@ -298,7 +298,7 @@ namespace Content.Server.Database
             {
                 markingStrings.Add(marking.ToString());
             }
-            var markings = JsonSerializer.SerializeToDocument(markingStrings);
+            var markings = SerializeMarkingsDocument(markingStrings, humanoid.ErpOrgans);
 
             profile.CharacterName = humanoid.Name;
             profile.FlavorText = humanoid.FlavorText;
@@ -369,6 +369,130 @@ namespace Content.Server.Database
             }
 
             return profile;
+        }
+
+        /// <summary>
+        /// Markings column stores either a legacy string array, or an object with markings + erpOrgans.
+        /// </summary>
+        private static void ParseMarkingsDocument(
+            JsonDocument? document,
+            out List<string> markings,
+            out ErpOrganPreferences erpOrgans)
+        {
+            markings = new List<string>();
+            erpOrgans = ErpOrganPreferences.Default();
+
+            if (document == null)
+                return;
+
+            var root = document.RootElement;
+            if (root.ValueKind == JsonValueKind.Array)
+            {
+                markings = root.Deserialize<List<string>>() ?? new List<string>();
+                return;
+            }
+
+            if (root.ValueKind != JsonValueKind.Object)
+                return;
+
+            if (root.TryGetProperty("markings", out var markingsEl) && markingsEl.ValueKind == JsonValueKind.Array)
+                markings = markingsEl.Deserialize<List<string>>() ?? new List<string>();
+
+            if (root.TryGetProperty("erpOrgans", out var erpEl) && erpEl.ValueKind == JsonValueKind.Object)
+                erpOrgans = DeserializeErpOrgans(erpEl);
+        }
+
+        private static JsonDocument SerializeMarkingsDocument(List<string> markings, ErpOrganPreferences erpOrgans)
+        {
+            var payload = new Dictionary<string, object?>
+            {
+                ["markings"] = markings,
+                ["erpOrgans"] = SerializeErpOrgans(erpOrgans),
+            };
+
+            return JsonSerializer.SerializeToDocument(payload);
+        }
+
+        private static Dictionary<string, object?> SerializeErpOrgans(ErpOrganPreferences prefs)
+        {
+            var organs = new Dictionary<string, object?>();
+            foreach (var (slot, cfg) in prefs.Organs)
+            {
+                organs[slot] = new Dictionary<string, object?>
+                {
+                    ["variant"] = cfg.Variant,
+                    ["size"] = cfg.Size,
+                    ["color"] = cfg.Color?.ToHex(),
+                };
+            }
+
+            var bounce = BreastBouncePreferences.Normalize(prefs.BreastBounce);
+            return new Dictionary<string, object?>
+            {
+                ["organs"] = organs,
+                ["breastBounce"] = new Dictionary<string, object?>
+                {
+                    ["enabled"] = bounce.Enabled,
+                    ["enabledInJumpsuit"] = bounce.EnabledInJumpsuit,
+                    ["bounce"] = bounce.Bounce,
+                    ["sideBounce"] = bounce.SideBounce,
+                    ["synchronized"] = bounce.Synchronized,
+                },
+            };
+        }
+
+        private static ErpOrganPreferences DeserializeErpOrgans(JsonElement element)
+        {
+            var result = ErpOrganPreferences.Default();
+            if (element.TryGetProperty("organs", out var organsEl) && organsEl.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var prop in organsEl.EnumerateObject())
+                {
+                    if (prop.Value.ValueKind != JsonValueKind.Object)
+                        continue;
+
+                    var variant = prop.Value.TryGetProperty("variant", out var v) ? v.GetString() ?? "human" : "human";
+                    var size = prop.Value.TryGetProperty("size", out var s) && s.TryGetInt32(out var sizeVal) ? sizeVal : 3;
+                    Color? color = null;
+                    if (prop.Value.TryGetProperty("color", out var c) && c.ValueKind == JsonValueKind.String)
+                    {
+                        var hex = c.GetString();
+                        if (!string.IsNullOrEmpty(hex))
+                            color = Color.FromHex(hex);
+                    }
+
+                    result.Organs[prop.Name] = new ErpOrganConfig
+                    {
+                        Variant = variant,
+                        Size = size,
+                        Color = color,
+                    };
+                }
+            }
+
+            if (element.TryGetProperty("breastBounce", out var bounceEl) && bounceEl.ValueKind == JsonValueKind.Object)
+            {
+                var enabled = !bounceEl.TryGetProperty("enabled", out var en) || en.ValueKind != JsonValueKind.False;
+                var enabledInJumpsuit = bounceEl.TryGetProperty("enabledInJumpsuit", out var eij) && eij.ValueKind == JsonValueKind.True;
+                var bounce = BreastBouncePreferences.DefaultBounce;
+                if (bounceEl.TryGetProperty("bounce", out var b) && b.TryGetSingle(out var bounceVal))
+                    bounce = bounceVal;
+                var sideBounce = BreastBouncePreferences.DefaultSideBounce;
+                if (bounceEl.TryGetProperty("sideBounce", out var sb) && sb.TryGetSingle(out var sideVal))
+                    sideBounce = sideVal;
+                var synchronized = !bounceEl.TryGetProperty("synchronized", out var syn) || syn.ValueKind != JsonValueKind.False;
+
+                result.BreastBounce = new BreastBouncePreferences
+                {
+                    Enabled = enabled,
+                    EnabledInJumpsuit = enabledInJumpsuit,
+                    Bounce = bounce,
+                    SideBounce = sideBounce,
+                    Synchronized = synchronized,
+                };
+            }
+
+            return ErpOrganPreferencesNormalizer.Normalize(result);
         }
         #endregion
 

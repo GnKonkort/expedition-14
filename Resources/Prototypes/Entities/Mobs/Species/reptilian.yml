@@ -11,6 +11,8 @@
     - Snout
     - HeadTop
     - HeadSide
+    - ErpChest
+    - ErpGroin
     undergarmentBottom: UndergarmentBottomBoxersReptilian
   - type: Hunger
   - type: Puller
@@ -28,6 +30,17 @@
     - id: FoodMeatLizard
       amount: 5
   - type: LizardAccent
+  # Arcane
+  - type: EroticOrgans
+    groinMale:
+    - proto: OrganPenisReptilian
+      slot: penis
+    groinFemale:
+    - proto: OrganVagina
+      slot: vagina
+    chestFemale:
+    - proto: OrganBreastsHuman
+      slot: breasts
   - type: Speech
     speechSounds: Lizard
     speechVerb: Reptilian

@@ -32,6 +32,7 @@ namespace Content.Shared.Humanoid
         Fire,
         LArmExtension, // Frontier: a species-specific extension layer, e.g. for harpy wings
         RArmExtension, // Frontier: a species-specific extension layer, e.g. for harpy wings
-
+        ErpGroin, // Arcane: covered by underwear/pants/jumpsuit
+        ErpChest, // Arcane: covered by undershirt/shirt/jumpsuit
     }
 }

@@ -52,6 +52,10 @@ public sealed class HumanoidAppearanceSystem : SharedHumanoidAppearanceSystem
         var sprite = entity.Comp2;
 
         sprite[_sprite.LayerMapReserve((entity.Owner, sprite), HumanoidVisualLayers.Eyes)].Color = humanoidAppearance.EyeColor;
+
+        // Arcane: notify overlay systems (ERP organ visuals) after base sprite refresh.
+        var ev = new HumanoidAppearanceUpdatedEvent();
+        RaiseLocalEvent(entity.Owner, ref ev);
     }
 
     private static bool IsHidden(HumanoidAppearanceComponent humanoid, HumanoidVisualLayers layer)
@@ -238,6 +242,9 @@ public sealed class HumanoidAppearanceSystem : SharedHumanoidAppearanceSystem
         humanoid.EyeColor = profile.Appearance.EyeColor;
 
         UpdateSprite((uid, humanoid, Comp<SpriteComponent>(uid)));
+
+        // Arcane: notify ERP organ visuals / lobby preview after profile application.
+        RaiseLocalEvent(uid, new Content.Shared._Arcane.ERP.HumanoidProfileLoadedEvent(profile));
     }
 
     private void ApplyMarkingSet(Entity<HumanoidAppearanceComponent, SpriteComponent> entity)

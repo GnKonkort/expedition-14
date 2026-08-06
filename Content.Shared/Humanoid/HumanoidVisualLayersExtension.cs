@@ -20,7 +20,9 @@ namespace Content.Shared.Humanoid
             if (!HasSexMorph(layer) || sex == Sex.Unsexed)
                 return id;
 
-            return $"{id}{sex}";
+            // Arcane: Futanari uses female sprite layers — no separate Futanari layer prototypes exist.
+            var visualSex = sex == Sex.Futanari ? Sex.Female : sex;
+            return $"{id}{visualSex}";
         }
 
         /// <summary>

@@ -460,6 +460,9 @@ public abstract class SharedHumanoidAppearanceSystem : EntitySystem
         humanoid.Age = profile.Age;
 
         Dirty(uid, humanoid);
+
+        // Arcane: notify ERP organ visuals / lobby preview after profile application.
+        RaiseLocalEvent(uid, new Content.Shared._Arcane.ERP.HumanoidProfileLoadedEvent(profile));
     }
 
     /// <summary>

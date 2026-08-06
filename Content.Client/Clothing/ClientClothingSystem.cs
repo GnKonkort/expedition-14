@@ -1,8 +1,11 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Numerics;
+using Content.Client._Arcane.ERP.Clothing;
 using Content.Client.DisplacementMap;
 using Content.Client.Inventory;
+using Content.Shared._Arcane.ERP.Clothing;
+using Content.Shared._Arcane.ERP.OrgansAppearance;
 using Content.Shared.Clothing;
 using Content.Shared.Clothing.Components;
 using Content.Shared.Clothing.EntitySystems;
@@ -54,6 +57,7 @@ public sealed class ClientClothingSystem : ClothingSystem
     [Dependency] private readonly InventorySystem _inventorySystem = default!;
     [Dependency] private readonly DisplacementMapSystem _displacement = default!;
     [Dependency] private readonly SpriteSystem _sprite = default!;
+    [Dependency] private readonly ErpJumpsuitBreastStretchSystem _jumpsuitStretch = default!;
 
     public override void Initialize()
     {
@@ -65,6 +69,19 @@ public sealed class ClientClothingSystem : ClothingSystem
         SubscribeLocalEvent<InventoryComponent, VisualsChangedEvent>(OnVisualsChanged);
         SubscribeLocalEvent<SpriteComponent, DidUnequipEvent>(OnDidUnequip);
         SubscribeLocalEvent<InventoryComponent, AppearanceChangeEvent>(OnAppearanceUpdate);
+        // Arcane: refresh jumpsuit stretch when breast size / organ visuals change.
+        SubscribeLocalEvent<ErpOrganVisualsComponent, ErpOrganVisualsUpdatedEvent>(OnErpOrganVisualsUpdated);
+    }
+
+    private void OnErpOrganVisualsUpdated(Entity<ErpOrganVisualsComponent> ent, ref ErpOrganVisualsUpdatedEvent args)
+    {
+        if (!TryComp<InventoryComponent>(ent, out var inventory))
+            return;
+
+        if (!_inventorySystem.TryGetSlotEntity(ent.Owner, Jumpsuit, out var item, inventory))
+            return;
+
+        RenderEquipment(ent.Owner, item.Value, Jumpsuit, inventory);
     }
 
     private void OnAppearanceUpdate(EntityUid uid, InventoryComponent component, ref AppearanceChangeEvent args)
@@ -208,6 +225,10 @@ public sealed class ClientClothingSystem : ClothingSystem
             _sprite.RemoveLayer(entity.AsNullable(), layer);
         }
         revealedLayers.Clear();
+
+        // Arcane: stretch adds a non-slot layer that must not orphan after unequip.
+        if (args.Slot == Jumpsuit)
+            _jumpsuitStretch.Clear(entity);
     }
 
     public void InitClothing(EntityUid uid, InventoryComponent component)
@@ -271,7 +292,7 @@ public sealed class ClientClothingSystem : ClothingSystem
         // bookmark to determine where in the list of layers we should insert the clothing layers.
         var slotLayerExists = _sprite.LayerMapTryGet((equipee, sprite), slot, out var index, false);
 
-        // Select displacement maps
+        // Select displacement maps (sex-based body shape only — breast coverage is pixel-stretch).
         var displacementData = inventory.Displacements.GetValueOrDefault(slot); //Default unsexed map
 
         var equipeeSex = CompOrNull<HumanoidAppearanceComponent>(equipee)?.Sex;
@@ -284,6 +305,7 @@ public sealed class ClientClothingSystem : ClothingSystem
                         displacementData = inventory.MaleDisplacements.GetValueOrDefault(slot);
                     break;
                 case Sex.Female:
+                case Sex.Futanari: // Arcane
                     if (inventory.FemaleDisplacements.Count > 0)
                         displacementData = inventory.FemaleDisplacements.GetValueOrDefault(slot);
                     break;
@@ -341,7 +363,13 @@ public sealed class ClientClothingSystem : ClothingSystem
             }
             // End Frontier: species-specific layering
 
-            if (displacementData is not null)
+            // Arcane: breast pixel-stretch already reshapes the jumpsuit; female displacement
+            // still warps UVs and punches ~1px holes over the breast silhouette — skip it.
+            var skipDisplacementForBreastStretch = slot == Jumpsuit
+                && TryComp<ErpOrganVisualsComponent>(equipee, out var erpVisuals)
+                && ErpJumpsuitDisplacement.TryGetBreastSize(erpVisuals, out _);
+
+            if (displacementData is not null && !skipDisplacementForBreastStretch)
             {
                 // Frontier: revise race check
                 //Checking that the state is not tied to the current race. In this case we don't need to use the displacement maps.
@@ -360,5 +388,9 @@ public sealed class ClientClothingSystem : ClothingSystem
         }
 
         RaiseLocalEvent(equipment, new EquipmentVisualsUpdatedEvent(equipee, slot, revealedLayers), true);
+
+        // Arcane: expand jumpsuit silhouette so breast contours stay under cloth pixels.
+        if (slot == Jumpsuit)
+            _jumpsuitStretch.TryApply(equipee);
     }
 }

@@ -209,6 +209,17 @@
     - FootstepSound
     - DoorBumpOpener
     - AnomalyHost
+  # Arcane: ERP organ editor definitions (visuals only, no body spawn)
+  - type: EroticOrgans
+    groinMale:
+    - proto: OrganPenisHuman
+      slot: penis
+    groinFemale:
+    - proto: OrganVagina
+      slot: vagina
+    chestFemale:
+    - proto: OrganBreastsHuman
+      slot: breasts
 
 - type: entity
   save: false

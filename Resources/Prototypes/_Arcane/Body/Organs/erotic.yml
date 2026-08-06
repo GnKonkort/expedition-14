@@ -1,0 +1,49 @@
+# Editor-definition organ prototypes (no body spawn / surgery).
+# Used by EroticOrgansComponent on species for the character editor ERP tab.
+
+- type: entity
+  id: OrganPenisHuman
+  categories: [ HideSpawnMenu ]
+  name: penis
+  components:
+  - type: EroticOrgan
+    editorVisible: true
+    editorMaxSize: 1
+
+- type: entity
+  id: OrganPenisReptilian
+  parent: OrganPenisHuman
+  categories: [ HideSpawnMenu ]
+
+- type: entity
+  id: OrganPenisDiona
+  parent: OrganPenisHuman
+  categories: [ HideSpawnMenu ]
+
+- type: entity
+  id: OrganPenisVox
+  parent: OrganPenisHuman
+  categories: [ HideSpawnMenu ]
+
+- type: entity
+  id: OrganPenisVulpkanin
+  parent: OrganPenisHuman
+  categories: [ HideSpawnMenu ]
+
+- type: entity
+  id: OrganVagina
+  categories: [ HideSpawnMenu ]
+  name: vagina
+  components:
+  - type: EroticOrgan
+    editorVisible: true
+    editorVariants: [human, gaping, hairy, spade]
+
+- type: entity
+  id: OrganBreastsHuman
+  categories: [ HideSpawnMenu ]
+  name: breasts
+  components:
+  - type: EroticOrgan
+    editorVisible: true
+    editorMaxSize: 4

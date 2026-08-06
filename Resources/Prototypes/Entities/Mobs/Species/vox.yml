@@ -22,6 +22,17 @@
       Male: UnisexVox
       Female: UnisexVox
       Unsexed: UnisexVox
+  # Arcane
+  - type: EroticOrgans
+    groinMale:
+    - proto: OrganPenisVox
+      slot: penis
+    groinFemale:
+    - proto: OrganVagina
+      slot: vagina
+    chestFemale:
+    - proto: OrganBreastsHuman
+      slot: breasts
   - type: Butcherable
     butcheringType: Spike
     spawned:

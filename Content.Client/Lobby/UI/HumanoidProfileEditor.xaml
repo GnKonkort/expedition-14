@@ -138,6 +138,8 @@
                         <humanoid:MarkingPicker Name="Markings" IgnoreCategories="Hair,FacialHair" />
                     </ScrollContainer>
                 </BoxContainer>
+                <!-- Arcane: ERP organ visuals -->
+                <BoxContainer Name="ErpTab" Orientation="Vertical" Margin="10" />
             </TabContainer>
         </BoxContainer>
         <!-- Right side -->

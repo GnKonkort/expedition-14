@@ -20,6 +20,8 @@
     hideLayersOnEquip:
     - Hair
     - Snout
+    - ErpChest
+    - ErpGroin
   - type: Inventory
     femaleDisplacements:
       jumpsuit:
